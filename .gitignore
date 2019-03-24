@@ -28,4 +28,5 @@ Makefile
 deps/picotest
 /picotlsvs/cifra/cifra.vcxproj.user
 /picotlsvs/testopenssl/testopenssl.vcxproj.user
+/build/*
 .DS_Store
