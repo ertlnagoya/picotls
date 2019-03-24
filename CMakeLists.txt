@@ -58,14 +58,14 @@ MESSAGE(STATUS "Found wolfssl at : ${WOLFSSL_LIBRARY} " )
 
 INCLUDE_DIRECTORIES(${WOLFSSL_INCLUDE_DIR})
 ADD_LIBRARY(picotls-openssl lib/openssl.c)
-TARGET_LINK_LIBRARIES(picotls-openssl ${WOLFSSL_LIBRARY} picotls-core ${CMAKE_DL_LIBS})
+TARGET_LINK_LIBRARIES(picotls-openssl ${WOLFSSL_LIBRARY} picotls-core ${CMAKE_DL_LIBS} m)
 ADD_EXECUTABLE(cli t/cli.c lib/pembase64.c)
-TARGET_LINK_LIBRARIES(cli picotls-openssl picotls-core resolv)
+TARGET_LINK_LIBRARIES(cli picotls-openssl picotls-core resolv m)
 ADD_EXECUTABLE(picotls-esni src/esni.c)
 TARGET_LINK_LIBRARIES(picotls-esni picotls-openssl picotls-core ${WOLFSSL_LIBRARY} ${CMAKE_DL_LIBS})
 ADD_EXECUTABLE(test-openssl.t ${MINICRYPTO_LIBRARY_FILES} lib/cifra.c lib/uecc.c lib/asn1.c lib/pembase64.c lib/ffx.c deps/picotest/picotest.c t/picotls.c t/openssl.c)
 SET_TARGET_PROPERTIES(test-openssl.t PROPERTIES COMPILE_FLAGS "-DPTLS_MEMORY_DEBUG=1")
-TARGET_LINK_LIBRARIES(test-openssl.t ${WOLFSSL_LIBRARY} ${CMAKE_DL_LIBS})
+TARGET_LINK_LIBRARIES(test-openssl.t ${WOLFSSL_LIBRARY} ${CMAKE_DL_LIBS} m)
 SET(TEST_EXES ${TEST_EXES} test-openssl.t)
 
 
