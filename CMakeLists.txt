@@ -5,8 +5,8 @@ PROJECT(picotls)
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 
-SET(CMAKE_C_FLAGS "-std=c99 -Wall -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
-INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR} deps/cifra/src/ext deps/cifra/src deps/micro-ecc deps/picotest include)
+SET(CMAKE_C_FLAGS "-std=c99 -Wall -O0 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
+INCLUDE_DIRECTORIES( deps/cifra/src/ext deps/cifra/src deps/micro-ecc deps/picotest include)
 SET(MINICRYPTO_LIBRARY_FILES
     deps/micro-ecc/uECC.c
     deps/cifra/src/aes.c
@@ -25,6 +25,14 @@ SET(MINICRYPTO_LIBRARY_FILES
 SET(CORE_FILES
     lib/picotls.c
     lib/pembase64.c)
+
+SET(WOLFSSL_INCLUDE_DIR 
+    ${CMAKE_CURRENT_SOURCE_DIR}/../wolfSSL-lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/../wolfSSL-lib/wolfssl
+    ${CMAKE_CURRENT_SOURCE_DIR}/../wolfSSL-lib/wolfcrypt
+    ${CMAKE_CURRENT_SOURCE_DIR}/../wolfSSL-lib/build
+)
+INCLUDE_DIRECTORIES("${WOLFSSL_INCLUDE_DIR}")
 
 PKG_CHECK_MODULES(BROTLI_DEC libbrotlidec)
 PKG_CHECK_MODULES(BROTLI_ENC libbrotlienc)
@@ -45,23 +53,21 @@ ADD_EXECUTABLE(test-minicrypto.t ${MINICRYPTO_LIBRARY_FILES} deps/picotest/picot
 
 SET(TEST_EXES test-minicrypto.t)
 
-FIND_PACKAGE(OpenSSL)
-IF (OPENSSL_FOUND AND NOT (OPENSSL_VERSION VERSION_LESS "1.0.1"))
-    MESSAGE(WARNING "Enabling OpenSSL support")
-    INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
-    ADD_LIBRARY(picotls-openssl lib/openssl.c)
-    TARGET_LINK_LIBRARIES(picotls-openssl ${OPENSSL_LIBRARIES} picotls-core ${CMAKE_DL_LIBS})
-    ADD_EXECUTABLE(cli t/cli.c lib/pembase64.c)
-    TARGET_LINK_LIBRARIES(cli picotls-openssl picotls-core resolv)
-    ADD_EXECUTABLE(picotls-esni src/esni.c)
-    TARGET_LINK_LIBRARIES(picotls-esni picotls-openssl picotls-core ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS})
-    ADD_EXECUTABLE(test-openssl.t ${MINICRYPTO_LIBRARY_FILES} lib/cifra.c lib/uecc.c lib/asn1.c lib/pembase64.c lib/ffx.c deps/picotest/picotest.c t/picotls.c t/openssl.c)
-    SET_TARGET_PROPERTIES(test-openssl.t PROPERTIES COMPILE_FLAGS "-DPTLS_MEMORY_DEBUG=1")
-    TARGET_LINK_LIBRARIES(test-openssl.t ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS})
-    SET(TEST_EXES ${TEST_EXES} test-openssl.t)
-ELSE ()
-    MESSAGE(WARNING "Disabling OpenSSL support (requires 1.0.1 or newer)")
-ENDIF ()
+FIND_LIBRARY(WOLFSSL_LIBRARY NAMES libwolf.a PATHS ${PROJECT_SOURCE_DIR}/../wolfSSL-lib/build)
+MESSAGE(STATUS "Found wolfssl at : ${WOLFSSL_LIBRARY} " )
+
+INCLUDE_DIRECTORIES(${WOLFSSL_INCLUDE_DIR})
+ADD_LIBRARY(picotls-openssl lib/openssl.c)
+TARGET_LINK_LIBRARIES(picotls-openssl ${WOLFSSL_LIBRARY} picotls-core ${CMAKE_DL_LIBS})
+ADD_EXECUTABLE(cli t/cli.c lib/pembase64.c)
+TARGET_LINK_LIBRARIES(cli picotls-openssl picotls-core resolv)
+ADD_EXECUTABLE(picotls-esni src/esni.c)
+TARGET_LINK_LIBRARIES(picotls-esni picotls-openssl picotls-core ${WOLFSSL_LIBRARY} ${CMAKE_DL_LIBS})
+ADD_EXECUTABLE(test-openssl.t ${MINICRYPTO_LIBRARY_FILES} lib/cifra.c lib/uecc.c lib/asn1.c lib/pembase64.c lib/ffx.c deps/picotest/picotest.c t/picotls.c t/openssl.c)
+SET_TARGET_PROPERTIES(test-openssl.t PROPERTIES COMPILE_FLAGS "-DPTLS_MEMORY_DEBUG=1")
+TARGET_LINK_LIBRARIES(test-openssl.t ${WOLFSSL_LIBRARY} ${CMAKE_DL_LIBS})
+SET(TEST_EXES ${TEST_EXES} test-openssl.t)
+
 
 ADD_CUSTOM_TARGET(check env BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR} prove --exec '' -v ${CMAKE_CURRENT_BINARY_DIR}/*.t t/*.t WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${TEST_EXES} cli)
 
@@ -78,7 +84,7 @@ IF (BUILD_FUZZER)
 
     ADD_EXECUTABLE(fuzz-asn1 fuzz/fuzz-asn1.c)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
-    INCLUDE_DIRECTORIES(t include ${OPENSSL_INCLUDE_DIR})
+    INCLUDE_DIRECTORIES(t include ${WOLFSSL_INCLUDE_DIR})
     ADD_DEFINITIONS(-DPTLS_FUZZ_HANDSHAKE=1)
     ADD_EXECUTABLE(fuzz-server-hello fuzz/fuzz-server-hello.c)
     ADD_EXECUTABLE(fuzz-client-hello fuzz/fuzz-client-hello.c)
@@ -102,8 +108,8 @@ IF (BUILD_FUZZER)
             LINK_FLAGS "-fsanitize=fuzzer")
     ENDIF (OSS_FUZZ)
 
-    TARGET_LINK_LIBRARIES(fuzz-asn1 picotls-minicrypto picotls-core picotls-openssl ${OPENSSL_LIBRARIES} ${LIB_FUZZER})
-    TARGET_LINK_LIBRARIES(fuzz-server-hello picotls-core picotls-openssl ${OPENSSL_LIBRARIES} ${LIB_FUZZER})
-    TARGET_LINK_LIBRARIES(fuzz-client-hello picotls-core picotls-openssl ${OPENSSL_LIBRARIES} ${LIB_FUZZER})
+    TARGET_LINK_LIBRARIES(fuzz-asn1 picotls-minicrypto picotls-core picotls-openssl ${WOLFSSL_LIBRARY} ${LIB_FUZZER})
+    TARGET_LINK_LIBRARIES(fuzz-server-hello picotls-core picotls-openssl ${WOLFSSL_LIBRARY} ${LIB_FUZZER})
+    TARGET_LINK_LIBRARIES(fuzz-client-hello picotls-core picotls-openssl ${WOLFSSL_LIBRARY} ${LIB_FUZZER})
 
 ENDIF()

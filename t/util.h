@@ -36,9 +36,10 @@
 #include <sys/types.h>
 #include <arpa/nameser.h>
 #include <resolv.h>
-#include <openssl/pem.h>
+#include "wolfssl/ssl.h"
 #include "picotls/pembase64.h"
 #include "picotls/openssl.h"
+#include <stdarg.h>
 
 static inline void load_certificate_chain(ptls_context_t *ctx, const char *fn)
 {

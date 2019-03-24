@@ -19,6 +19,21 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+#ifndef HAVE_ECC
+#define HAVE_ECC
+#endif
+#ifndef OPENSSL_EXTRA
+#define OPENSSL_EXTRA
+#endif
+#ifndef WOLFSSL_SHA512
+#define WOLFSSL_SHA512
+#endif
+#ifndef WOLFSSL_SHA384
+#define WOLFSSL_SHA384
+#endif
+#ifndef WOLFSSL_SHA224
+#define WOLFSSL_SHA224
+#endif
 
 #ifdef _WINDOWS
 #include "wincompat.h"
@@ -29,17 +44,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <openssl/bn.h>
-#include <openssl/crypto.h>
-#include <openssl/ec.h>
-#include <openssl/ecdh.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/objects.h>
-#include <openssl/rand.h>
-#include <openssl/x509.h>
-#include <openssl/x509v3.h>
-#include <openssl/x509_vfy.h>
+#include "wolfssl/ssl.h"
+#include "wolfssl/openssl/bn.h"
+#include "wolfssl/openssl/crypto.h"
+#include "wolfssl/openssl/ec.h"
+#include "wolfssl/openssl/ecdh.h"
+#include "wolfssl/openssl/err.h"
+#include "wolfssl/openssl/evp.h"
+#include "wolfssl/openssl/objects.h"
+#include "wolfssl/openssl/rand.h"
+#include "wolfssl/openssl/x509.h"
+#include "wolfssl/openssl/x509v3.h"
+#include "wolfssl/openssl/ssl.h"
 #include "picotls.h"
 #include "picotls/openssl.h"
 
@@ -57,8 +73,8 @@
 
 #if !OPENSSL_1_1_API
 
-#define EVP_PKEY_up_ref(p) CRYPTO_add(&(p)->references, 1, CRYPTO_LOCK_EVP_PKEY)
-#define X509_STORE_up_ref(p) CRYPTO_add(&(p)->references, 1, CRYPTO_LOCK_X509_STORE)
+//#define EVP_PKEY_up_ref(p) CRYPTO_add(&(p)->references, 1, CRYPTO_LOCK_EVP_PKEY)
+//#define X509_STORE_up_ref(p) CRYPTO_add(&(p)->references, 1, CRYPTO_LOCK_X509_STORE)
 
 static HMAC_CTX *HMAC_CTX_new(void)
 {
@@ -77,6 +93,109 @@ static void HMAC_CTX_free(HMAC_CTX *ctx)
 }
 
 #endif
+/*****************************************mycode*******************************************/
+
+size_t HMAC_size(const HMAC_CTX *ctx)
+{
+    int size;
+    switch(ctx->type){
+    	case WC_MD5:
+    		size = WC_MD5_DIGEST_SIZE;
+    		break;
+    	case WC_SHA224:
+    		size = WC_SHA224_DIGEST_SIZE;
+    		break;
+    	case WC_SHA256:
+    		size = WC_SHA256_DIGEST_SIZE;
+    		break;
+    	case WC_SHA384:
+    		size = WC_SHA384_DIGEST_SIZE;
+    		break;
+    	case WC_SHA512:
+    		size = WC_SHA512_DIGEST_SIZE;
+    		break;
+    	case WC_SHA:
+    		size = WC_SHA_DIGEST_SIZE;
+    		break;
+		default:
+			size = -1;
+			break;
+    }
+
+    return (size < 0) ? 0 : size;
+}
+
+size_t EC_POINT_point2oct(const EC_GROUP *group, const EC_POINT *p,
+                          int form,
+                          unsigned char *buf, size_t len, BN_CTX *ctx){
+	return 0;
+}
+
+int EC_POINT_oct2point(const EC_GROUP *group, EC_POINT *p,
+                       const unsigned char *buf, size_t len, BN_CTX *ctx){
+	return 0;
+}
+
+int EVP_PKEY_CTX_set_rsa_mgf1_md(EVP_PKEY_CTX *ctx, const EVP_MD *md){
+	return 0;
+}
+
+int EVP_PKEY_CTX_set_rsa_pss_saltlen(EVP_PKEY_CTX *ctx, int len){
+	return 0;
+}
+
+int EVP_CIPHER_CTX_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr){
+	return 0;
+}
+
+//static char *EVP_AES_128_GCM;	
+const EVP_CIPHER* EVP_aes_128_gcm(void){
+    return NULL;
+}
+
+//static char *EVP_AES_256_GCM;	
+const EVP_CIPHER* EVP_aes_256_gcm(void){
+    return NULL;
+}
+
+ int X509_STORE_up_ref(X509_STORE *vfy){
+ 	return 0;
+ }
+
+int EVP_PKEY_up_ref(EVP_PKEY *pkey)
+{
+    return 0;
+}
+
+int X509_STORE_CTX_set_purpose(X509_STORE_CTX *ctx, int purpose)
+{
+	return 0;
+}
+# define         EVP_CTRL_INIT                   0x0
+# define         EVP_CTRL_SET_KEY_LENGTH         0x1
+# define         EVP_CTRL_GET_RC2_KEY_BITS       0x2
+# define         EVP_CTRL_SET_RC2_KEY_BITS       0x3
+# define         EVP_CTRL_GET_RC5_ROUNDS         0x4
+# define         EVP_CTRL_SET_RC5_ROUNDS         0x5
+# define         EVP_CTRL_RAND_KEY               0x6
+# define         EVP_CTRL_PBE_PRF_NID            0x7
+# define         EVP_CTRL_COPY                   0x8
+# define         EVP_CTRL_AEAD_SET_IVLEN         0x9
+# define         EVP_CTRL_AEAD_GET_TAG           0x10
+# define         EVP_CTRL_AEAD_SET_TAG           0x11
+# define         EVP_CTRL_AEAD_SET_IV_FIXED      0x12
+# define         EVP_CTRL_GCM_SET_IVLEN          EVP_CTRL_AEAD_SET_IVLEN
+# define         EVP_CTRL_GCM_GET_TAG            EVP_CTRL_AEAD_GET_TAG
+# define         EVP_CTRL_GCM_SET_TAG            EVP_CTRL_AEAD_SET_TAG
+# define         EVP_CTRL_GCM_SET_IV_FIXED       EVP_CTRL_AEAD_SET_IV_FIXED
+# define         EVP_CTRL_GCM_IV_GEN             0x13
+# define         EVP_CTRL_CCM_SET_IVLEN          EVP_CTRL_AEAD_SET_IVLEN
+# define         EVP_CTRL_CCM_GET_TAG            EVP_CTRL_AEAD_GET_TAG
+# define         EVP_CTRL_CCM_SET_TAG            EVP_CTRL_AEAD_SET_TAG
+# define         EVP_CTRL_CCM_SET_IV_FIXED       EVP_CTRL_AEAD_SET_IV_FIXED
+# define         EVP_CTRL_CCM_SET_L              0x14
+# define         EVP_CTRL_CCM_SET_MSGLEN         0x15
+/*****************************************mycode*******************************************/
 
 void ptls_openssl_random_bytes(void *buf, size_t len)
 {
@@ -908,7 +1027,7 @@ static int aead_chacha20poly1305_setup_crypto(ptls_aead_context_t *ctx, int is_e
 ptls_define_hash(sha256, SHA256_CTX, SHA256_Init, SHA256_Update, _sha256_final);
 
 #define _sha384_final(ctx, md) SHA384_Final((md), (ctx))
-ptls_define_hash(sha384, SHA512_CTX, SHA384_Init, SHA384_Update, _sha384_final);
+ptls_define_hash(sha384, SHA384_CTX, SHA384_Init, SHA384_Update, _sha384_final);
 
 static int sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, uint16_t *selected_algorithm, ptls_buffer_t *outbuf,
                             ptls_iovec_t input, const uint16_t *algorithms, size_t num_algorithms)
@@ -1003,7 +1122,8 @@ int ptls_openssl_init_sign_certificate(ptls_openssl_sign_certificate_t *self, EV
         PUSH_SCHEME(PTLS_SIGNATURE_RSA_PSS_RSAE_SHA512, EVP_sha512());
         break;
     case EVP_PKEY_EC: {
-        EC_KEY *eckey = EVP_PKEY_get1_EC_KEY(key);
+        //EC_KEY *eckey = EVP_PKEY_get1_EC_KEY(key);
+        EC_KEY *eckey = key->ecc;
         switch (EC_GROUP_get_curve_name(EC_KEY_get0_group(eckey))) {
         case NID_X9_62_prime256v1:
             PUSH_SCHEME(PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, EVP_sha256());
@@ -1022,7 +1142,7 @@ int ptls_openssl_init_sign_certificate(ptls_openssl_sign_certificate_t *self, EV
             EC_KEY_free(eckey);
             return PTLS_ERROR_INCOMPATIBLE_KEY;
         }
-        EC_KEY_free(eckey);
+        //EC_KEY_free(eckey);
     } break;
     default:
         return PTLS_ERROR_INCOMPATIBLE_KEY;
@@ -1167,8 +1287,8 @@ static int verify_cert_chain(X509_STORE *store, X509 *cert, STACK_OF(X509) * cha
     ret = 0;
 
 Exit:
-    if (verify_ctx != NULL)
-        X509_STORE_CTX_free(verify_ctx);
+    //if (verify_ctx != NULL)
+        //X509_STORE_CTX_free(verify_ctx);
     return ret;
 }
 
@@ -1177,7 +1297,7 @@ static int verify_cert(ptls_verify_certificate_t *_self, ptls_t *tls, int (**ver
 {
     ptls_openssl_verify_certificate_t *self = (ptls_openssl_verify_certificate_t *)_self;
     X509 *cert = NULL;
-    STACK_OF(X509) *chain = sk_X509_new_null();
+    STACK_OF(X509) *chain = sk_X509_new();
     size_t i;
     int ret = 0;
 
@@ -1188,7 +1308,7 @@ static int verify_cert(ptls_verify_certificate_t *_self, ptls_t *tls, int (**ver
         ret = PTLS_ALERT_BAD_CERTIFICATE;
         goto Exit;
     }
-    for (i = 1; i != num_certs; ++i) {
+    for (i = 0; i != num_certs; ++i) {
         X509 *interm = to_x509(certs[i]);
         if (interm == NULL) {
             ret = PTLS_ALERT_BAD_CERTIFICATE;
@@ -1267,7 +1387,7 @@ Error:
 }
 
 #define TICKET_LABEL_SIZE 16
-#define TICKET_IV_SIZE EVP_MAX_IV_LENGTH
+#define TICKET_IV_SIZE TICKET_LABEL_SIZE
 
 int ptls_openssl_encrypt_ticket(ptls_buffer_t *buf, ptls_iovec_t src,
                                 int (*cb)(unsigned char *key_name, unsigned char *iv, EVP_CIPHER_CTX *ctx, HMAC_CTX *hctx, int enc))
