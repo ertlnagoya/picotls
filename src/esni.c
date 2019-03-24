@@ -26,12 +26,15 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
-#include <openssl/err.h>
-#include <openssl/engine.h>
-#include <openssl/pem.h>
+#include "wolfssl/openssl/err.h"
+#include "wolfssl/openssl/evp.h"
+#include "wolfssl/ssl.h"
+//#include <openssl/engine.h>
+//#include <openssl/pem.h>
 #include "picotls.h"
 #include "picotls/pembase64.h"
 #include "picotls/openssl.h"
+#define OPENSSL_NO_ENGINE
 
 static int emit_esni(ptls_key_exchange_context_t **key_exchanges, ptls_cipher_suite_t **cipher_suites, uint16_t padded_length,
                      uint64_t not_before, uint64_t lifetime)

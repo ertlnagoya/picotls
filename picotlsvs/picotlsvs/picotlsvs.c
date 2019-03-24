@@ -1,7 +1,7 @@
 /* picotlsvs: test program for the TLS 1.3 library. */
 #include <stdio.h>
 #include <stdarg.h>
-#include <openssl/pem.h>
+#include "wolfssl/ssl.h"
 #include "../picotls/wincompat.h"
 #include "../../include/picotls.h"
 #include "../../include/picotls/openssl.h"

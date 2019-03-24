@@ -39,10 +39,9 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/engine.h>
-#include <openssl/pem.h>
+#include "wolfssl/openssl/err.h"
+#include "wolfssl/openssl/evp.h"
+#include "wolfssl/ssl.h"
 #if PICOTLS_USE_BROTLI
 #include "brotli/decode.h"
 #endif
@@ -52,6 +51,7 @@
 #include "picotls/certificate_compression.h"
 #endif
 #include "util.h"
+#define OPENSSL_NO_ENGINE
 
 static void shift_buffer(ptls_buffer_t *buf, size_t delta)
 {

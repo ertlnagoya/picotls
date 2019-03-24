@@ -26,12 +26,17 @@
 extern "C" {
 #endif
 
-#include <openssl/opensslv.h>
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
-#include <openssl/x509.h>
+#include "wolfssl/openssl/opensslv.h"
+#include "wolfssl/openssl/evp.h"
+#include "wolfssl/openssl/hmac.h"
+#include "wolfssl/openssl/x509.h"
 #include "../picotls.h"
 
+#define HAVE_ECC
+#define OPENSSL_EXTRA
+#define WOLFSSL_SHA512
+#define WOLFSSL_SHA384
+#define WOLFSSL_SHA224
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 #define PTLS_OPENSSL_HAVE_CHACHA20_POLY1305 1
 #endif
@@ -53,7 +58,7 @@ extern ptls_key_exchange_algorithm_t ptls_openssl_secp521r1;
 extern ptls_key_exchange_algorithm_t ptls_openssl_x25519;
 #endif
 #ifndef OPENSSL_NO_BF
-#define PTLS_OPENSSL_HAVE_BF 1
+#define PTLS_OPENSSL_HAVE_BF 0
 #endif
 
 extern ptls_key_exchange_algorithm_t *ptls_openssl_key_exchanges[];

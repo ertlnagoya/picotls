@@ -11,10 +11,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/engine.h>
-#include <openssl/pem.h>
+#include "wolfssl/openssl/err.h"
+#include "wolfssl/openssl/evp.h"
+#include "wolfssl/ssl.h"
 
 #include "picotls.h"
 #include "picotls/openssl.h"
