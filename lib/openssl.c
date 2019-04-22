@@ -1287,8 +1287,8 @@ static int verify_cert_chain(X509_STORE *store, X509 *cert, STACK_OF(X509) * cha
     ret = 0;
 
 Exit:
-    if (verify_ctx != NULL)
-        X509_STORE_CTX_free(verify_ctx);
+    // if (verify_ctx != NULL)
+    //     X509_STORE_CTX_free(verify_ctx);
     return ret;
 }
 
