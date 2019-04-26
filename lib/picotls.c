@@ -19,6 +19,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+#include "userq_settings.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -26,6 +27,8 @@
 #include <string.h>
 #ifdef _WINDOWS
 #include "wincompat.h"
+#elif defined USE_LWIP
+#include "lwip/sockets.h"
 #else
 #include <arpa/inet.h>
 #include <sys/time.h>
@@ -5115,10 +5118,10 @@ int ptls_server_name_is_ipaddr(const char *name)
 {
 #ifdef AF_INET
     struct sockaddr_in sin;
-    if (inet_pton(AF_INET, name, &sin) == 1)
+    if (lwip_inet_pton(AF_INET, name, &sin) == 1)
         return 1;
 #endif
-#ifdef AF_INET6
+#if (AF_INET6 != 0)
     struct sockaddr_in6 sin6;
     if (inet_pton(AF_INET6, name, &sin6) == 1)
         return 1;

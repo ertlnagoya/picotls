@@ -28,6 +28,8 @@ extern "C" {
 
 #include "picotls.h"
 
+#define O_CLOEXEC 0
+
 #define SECP256R1_PRIVATE_KEY_SIZE 32
 #define SECP256R1_PUBLIC_KEY_SIZE 65 /* including the header */
 #define SECP256R1_SHARED_SECRET_SIZE 32
