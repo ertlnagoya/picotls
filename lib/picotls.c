@@ -84,10 +84,11 @@
 #ifndef PTLS_MAX_EARLY_DATA_SKIP_SIZE
 #define PTLS_MAX_EARLY_DATA_SKIP_SIZE 65536
 #endif
-#if defined(PTLS_DEBUG) && PTLS_DEBUG
-#define PTLS_DEBUGF(...) fprintf(stderr, __VA_ARGS__)
-#else
+#if defined(PTLS_DBG) && PTLS_DBG
+#define PTLS_DEBUG(...) syslog(LOG_NOTICE, __VA_ARGS__)
 #define PTLS_DEBUGF(...)
+#else
+#define PTLS_DEBUG(...)
 #endif
 
 #ifndef PTLS_MEMORY_DEBUG
@@ -1317,7 +1318,7 @@ Exit:
 static int send_finished(ptls_t *tls, ptls_message_emitter_t *emitter)
 {
     int ret;
-
+    PTLS_DEBUG("Sending Finished\n");    
     ptls_push_message(emitter, tls->key_schedule, PTLS_HANDSHAKE_TYPE_FINISHED, {
         if ((ret = ptls_buffer_reserve(emitter->buf, tls->key_schedule->hashes[0].algo->digest_size)) != 0)
             goto Exit;
@@ -2200,7 +2201,7 @@ static int client_handle_hello(ptls_t *tls, ptls_message_emitter_t *emitter, ptl
     struct st_ptls_server_hello_t sh;
     ptls_iovec_t ecdh_secret = {NULL};
     int ret;
-
+    PTLS_DEBUG("Receiving ServerHello\n");
     if ((ret = decode_server_hello(tls, &sh, message.base + PTLS_HANDSHAKE_HEADER_SIZE, message.base + message.len)) != 0)
         goto Exit;
     if (!(sh.legacy_session_id.len == sizeof(tls->client.legacy_session_id) &&
@@ -2292,7 +2293,7 @@ static int client_handle_encrypted_extensions(ptls_t *tls, ptls_iovec_t message,
     uint16_t type;
     ptls_raw_extension_t unknown_extensions[MAX_UNKNOWN_EXTENSIONS + 1];
     int ret, skip_early_data = 1;
-
+        PTLS_DEBUG("Receiving EncryptedExtensions\n");
     unknown_extensions[0].type = UINT16_MAX;
 
     decode_extensions(src, end, PTLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS, &type, {
@@ -2474,10 +2475,12 @@ static int send_certificate_and_certificate_verify(ptls_t *tls, ptls_message_emi
     }
 
     /* send Certificate (or the equivalent) */
+    PTLS_DEBUG("Sending Certificate\n");    
     if ((ret = emit_certificate->cb(emit_certificate, tls, emitter, tls->key_schedule, context, push_status_request)) != 0)
         goto Exit;
 
     /* build and send CertificateVerify */
+    PTLS_DEBUG("Sending CertificateVerify\n");    
     if (tls->ctx->sign_certificate != NULL) {
         ptls_push_message(emitter, tls->key_schedule, PTLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY, {
             ptls_buffer_t *sendbuf = emitter->buf;
@@ -2573,7 +2576,7 @@ static int client_do_handle_certificate(ptls_t *tls, const uint8_t *src, const u
 static int client_handle_certificate(ptls_t *tls, ptls_iovec_t message)
 {
     int ret;
-
+    PTLS_DEBUG("Receiving Certificate\n");
     if ((ret = client_do_handle_certificate(tls, message.base + PTLS_HANDSHAKE_HEADER_SIZE, message.base + message.len)) != 0)
         return ret;
 
@@ -2692,6 +2695,7 @@ Exit:
 
 static int client_handle_certificate_verify(ptls_t *tls, ptls_iovec_t message)
 {
+    PTLS_DEBUG("Receiving CertificateVerify\n");
     int ret = handle_certificate_verify(tls, message, PTLS_SERVER_CERTIFICATE_VERIFY_CONTEXT_STRING);
 
     if (ret == 0) {
@@ -2718,7 +2722,7 @@ static int client_handle_finished(ptls_t *tls, ptls_message_emitter_t *emitter, 
 {
     uint8_t send_secret[PTLS_MAX_DIGEST_SIZE];
     int ret;
-
+    PTLS_DEBUG("Receiving Finished\n");
     if ((ret = verify_finished(tls, message)) != 0)
         goto Exit;
     ptls__key_schedule_update_hash(tls->key_schedule, message.base, message.len);
@@ -3462,6 +3466,7 @@ static int server_handle_hello(ptls_t *tls, ptls_message_emitter_t *emitter, ptl
     uint8_t finished_key[PTLS_MAX_DIGEST_SIZE];
     int accept_early_data = 0, is_second_flight = tls->state == PTLS_STATE_SERVER_EXPECT_SECOND_CLIENT_HELLO, ret;
 
+    PTLS_DEBUG("Receiving ClientHello\n");
     /* decode ClientHello */
     if ((ret = decode_client_hello(tls, &ch, message.base + PTLS_HANDSHAKE_HEADER_SIZE, message.base + message.len, properties)) !=
         0)
@@ -3707,6 +3712,7 @@ static int server_handle_hello(ptls_t *tls, ptls_message_emitter_t *emitter, ptl
         tls->key_share = key_share.algorithm;
     }
 
+    PTLS_DEBUG("Sending ServerHello\n");
     /* send ServerHello */
     EMIT_SERVER_HELLO(tls->key_schedule,
                       { tls->ctx->random_bytes(emitter->buf->base + emitter->buf->off, PTLS_HELLO_RANDOM_SIZE); },
@@ -3745,6 +3751,7 @@ static int server_handle_hello(ptls_t *tls, ptls_message_emitter_t *emitter, ptl
     }
 
     /* send EncryptedExtensions */
+    PTLS_DEBUG("Sending EncryptedExtensions\n");    
     ptls_push_message(emitter, tls->key_schedule, PTLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS, {
         ptls_buffer_t *sendbuf = emitter->buf;
         ptls_buffer_push_block(sendbuf, 2, {
@@ -3872,7 +3879,7 @@ Exit:
 static int server_handle_finished(ptls_t *tls, ptls_iovec_t message)
 {
     int ret;
-
+    PTLS_DEBUG("Receiving Finished\n");
     if ((ret = verify_finished(tls, message)) != 0)
         return ret;
 
