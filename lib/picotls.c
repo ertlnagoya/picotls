@@ -89,6 +89,7 @@
 #define PTLS_DEBUGF(...)
 #else
 #define PTLS_DEBUG(...)
+#define PTLS_DEBUGF(...)
 #endif
 
 #ifndef PTLS_MEMORY_DEBUG
