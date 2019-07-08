@@ -5,7 +5,7 @@ PROJECT(picotls)
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 
-SET(CMAKE_C_FLAGS "-std=c99 -Wall -O2 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
+SET(CMAKE_C_FLAGS "-std=c99 -Wall -O0 -g ${CC_WARNING_FLAGS} ${CMAKE_C_FLAGS}")
 INCLUDE_DIRECTORIES( deps/cifra/src/ext deps/cifra/src deps/micro-ecc deps/picotest include)
 SET(MINICRYPTO_LIBRARY_FILES
     deps/micro-ecc/uECC.c
