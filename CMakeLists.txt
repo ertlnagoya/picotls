@@ -49,6 +49,9 @@ ADD_LIBRARY(picotls-core ${CORE_FILES})
 TARGET_LINK_LIBRARIES(picotls-core ${CORE_EXTRA_LIBS})
 ADD_LIBRARY(picotls-minicrypto ${MINICRYPTO_LIBRARY_FILES} lib/cifra.c lib/minicrypto-pem.c lib/uecc.c lib/asn1.c lib/ffx.c)
 TARGET_LINK_LIBRARIES(picotls-minicrypto picotls-core)
+ADD_LIBRARY(picotls-wolfcrypt lib/wolfcrypt.c)
+TARGET_LINK_LIBRARIES(picotls-wolfcrypt picotls-core)
+
 ADD_EXECUTABLE(test-minicrypto.t ${MINICRYPTO_LIBRARY_FILES} deps/picotest/picotest.c t/picotls.c t/minicrypto.c lib/asn1.c lib/pembase64.c lib/ffx.c)
 
 SET(TEST_EXES test-minicrypto.t)
