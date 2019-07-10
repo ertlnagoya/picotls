@@ -132,32 +132,34 @@ Exit:
 }
 #endif /* Unimplemented */
 
-struct aesctr_context_t {
+struct wolfctr_context_t {
     ptls_cipher_context_t super;
     Aes wolf_aes;
 };
 
 static void aesctr_dispose(ptls_cipher_context_t *_ctx)
 {
-    struct aesctr_context_t *ctx = (struct aesctr_context_t *)_ctx;
+    struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
     ptls_clear_memory(ctx, sizeof(*ctx));
 }
 
 static void aesctr_init(ptls_cipher_context_t *_ctx, const void *iv)
 {
-    struct aesctr_context_t *ctx = (struct aesctr_context_t *)_ctx;
+    struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
+    ctx->wolf_aes.left = 0;
+    memset(ctx->wolf_aes.tmp ,0 ,AES_BLOCK_SIZE);
     wc_AesSetIV(&ctx->wolf_aes, iv);
 }
 
 static void aesctr_transform(ptls_cipher_context_t *_ctx, void *output, const void *input, size_t len)
 {
-    struct aesctr_context_t *ctx = (struct aesctr_context_t *)_ctx;
+    struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
     wc_AesCtrEncrypt(&ctx->wolf_aes, output, input, len);
 }
 
 static int aesctr_setup_crypto(ptls_cipher_context_t *_ctx, int is_enc, const void *key, size_t key_size)
 {
-    struct aesctr_context_t *ctx = (struct aesctr_context_t *)_ctx;
+    struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
     ctx->super.do_dispose = aesctr_dispose;
     ctx->super.do_init = aesctr_init;
     ctx->super.do_transform = aesctr_transform;
@@ -427,13 +429,13 @@ ptls_define_hash(sha256, cf_sha256_context, cf_sha256_init, cf_sha256_update, cf
 ptls_define_hash(sha384, cf_sha512_context, cf_sha384_init, cf_sha384_update, cf_sha384_digest_final);
 
 ptls_cipher_algorithm_t ptls_wolfcrypt_aes128ctr = {
-    "AES128-CTR",          PTLS_AES128_KEY_SIZE, 1 /* block size */, PTLS_AES_IV_SIZE, sizeof(struct aesctr_context_t),
+    "AES128-CTR",          PTLS_AES128_KEY_SIZE, 1 /* block size */, PTLS_AES_IV_SIZE, sizeof(struct wolfctr_context_t),
     aes128ctr_setup_crypto};
 ptls_aead_algorithm_t ptls_wolfcrypt_aes128gcm = {
     "AES128-GCM",        &ptls_wolfcrypt_aes128ctr, NULL,      PTLS_AES128_KEY_SIZE,
     PTLS_AESGCM_IV_SIZE, PTLS_AESGCM_TAG_SIZE,       sizeof(struct aesgcm_context_t), aead_aes128gcm_setup_crypto};
 ptls_cipher_algorithm_t ptls_wolfcrypt_aes256ctr = {
-    "AES256-CTR",          PTLS_AES256_KEY_SIZE, 1 /* block size */, PTLS_AES_IV_SIZE, sizeof(struct aesctr_context_t),
+    "AES256-CTR",          PTLS_AES256_KEY_SIZE, 1 /* block size */, PTLS_AES_IV_SIZE, sizeof(struct wolfctr_context_t),
     aes256ctr_setup_crypto};
 ptls_aead_algorithm_t ptls_wolfcrypt_aes256gcm = {
     "AES256-GCM",        &ptls_wolfcrypt_aes256ctr, NULL,      PTLS_AES256_KEY_SIZE,
