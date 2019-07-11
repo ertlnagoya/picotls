@@ -29,6 +29,7 @@ extern "C" {
 #include <assert.h>
 #include <inttypes.h>
 #include <sys/types.h>
+#include <userq_settings.h>
 
 #ifndef PTLS_FUZZ_HANDSHAKE
 #define PTLS_FUZZ_HANDSHAKE 0
@@ -271,6 +272,10 @@ typedef struct st_ptls_aead_context_t {
     uint8_t static_iv[PTLS_MAX_IV_SIZE];
     /* field above this line must not be altered by the crypto binding */
     void (*dispose_crypto)(struct st_ptls_aead_context_t *ctx);
+#ifdef USE_WOLFSSL
+    size_t (*do_encrypt)(struct st_ptls_aead_context_t *ctx, void *output, const void *input, size_t inlen, const void *iv,
+                         const void *aad, size_t aadlen);
+#endif
     void (*do_encrypt_init)(struct st_ptls_aead_context_t *ctx, const void *iv, const void *aad, size_t aadlen);
     size_t (*do_encrypt_update)(struct st_ptls_aead_context_t *ctx, void *output, const void *input, size_t inlen);
     size_t (*do_encrypt_final)(struct st_ptls_aead_context_t *ctx, void *output);
