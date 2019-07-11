@@ -27,6 +27,10 @@
 #ifndef AES_H
 #define AES_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -148,5 +152,9 @@ extern void cf_aes_finish(cf_aes_context *ctx);
  * Abstract interface to AES.  See :c:type:`cf_prp` for
  * more information. */
 extern const cf_prp cf_aes;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

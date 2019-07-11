@@ -15,6 +15,10 @@
 #ifndef MODES_H
 #define MODES_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -584,4 +588,7 @@ int cf_ocb_decrypt(const cf_prp *prp, void *prpctx,
                    const uint8_t *nonce, size_t nnonce,
                    const uint8_t *tag, size_t ntag,
                    uint8_t *plain);
+#ifdef __cplusplus
+}
+#endif
 #endif
