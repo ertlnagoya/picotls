@@ -25,12 +25,12 @@
 #include <errno.h>
 
 #include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/sha256.h>
+#include <wolfssl/wolfcrypt/sha512.h>
 
 #include "userq_settings.h"
 #include "picotls.h"
 #include "picotls/wolfcrypt.h"
-
-#include "sha2.h" // cifra sha2
 
 #if defined(USE_WOLFSSL)
 #if 0
@@ -425,8 +425,9 @@ static int aead_chacha20poly1305_setup_crypto(ptls_aead_context_t *_ctx, int is_
 
 ptls_key_exchange_algorithm_t ptls_minicrypto_x25519 = {PTLS_GROUP_X25519, x25519_create_key_exchange, x25519_key_exchange};
 #endif /* Unimplemented */
-ptls_define_hash(sha256, cf_sha256_context, cf_sha256_init, cf_sha256_update, cf_sha256_digest_final);
-ptls_define_hash(sha384, cf_sha512_context, cf_sha384_init, cf_sha384_update, cf_sha384_digest_final);
+
+ptls_define_hash(sha256, wc_Sha256, wc_InitSha256, wc_Sha256Update, wc_Sha256Final);
+ptls_define_hash(sha384, wc_Sha384, wc_InitSha384, wc_Sha384Update, wc_Sha384Final);
 
 ptls_cipher_algorithm_t ptls_wolfcrypt_aes128ctr = {
     "AES128-CTR",          PTLS_AES128_KEY_SIZE, 1 /* block size */, PTLS_AES_IV_SIZE, sizeof(struct wolfctr_context_t),

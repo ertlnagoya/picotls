@@ -19,21 +19,6 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-#ifndef HAVE_ECC
-#define HAVE_ECC
-#endif
-#ifndef OPENSSL_EXTRA
-#define OPENSSL_EXTRA
-#endif
-#ifndef WOLFSSL_SHA512
-#define WOLFSSL_SHA512
-#endif
-#ifndef WOLFSSL_SHA384
-#define WOLFSSL_SHA384
-#endif
-#ifndef WOLFSSL_SHA224
-#define WOLFSSL_SHA224
-#endif
 
 #ifdef _WINDOWS
 #include "wincompat.h"

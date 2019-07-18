@@ -32,11 +32,6 @@ extern "C" {
 #include "wolfssl/openssl/x509.h"
 #include "../picotls.h"
 
-#define HAVE_ECC
-#define OPENSSL_EXTRA
-#define WOLFSSL_SHA512
-#define WOLFSSL_SHA384
-#define WOLFSSL_SHA224
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 #define PTLS_OPENSSL_HAVE_CHACHA20_POLY1305 1
 #endif
