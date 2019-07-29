@@ -24,7 +24,10 @@
 #endif
 #include <errno.h>
 
+#include <wolfssl/error-ssl.h>
+#include <wolfssl/wolfcrypt/logging.h>
 #include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/curve25519.h>
 #include <wolfssl/wolfcrypt/sha256.h>
 #include <wolfssl/wolfcrypt/sha512.h>
 
@@ -33,117 +36,247 @@
 #include "picotls/wolfcrypt.h"
 
 #if defined(USE_WOLFSSL)
-#if 0
 void ptls_wolfcrypt_random_bytes(void *buf, size_t len)
 {
     return;
 }
 
-#define X25519_KEY_SIZE 32
-
-struct st_x25519_key_exchange_t {
+struct st_wolf_x25519_key_exchange_t {
     ptls_key_exchange_context_t super;
-    uint8_t priv[X25519_KEY_SIZE];
-    uint8_t pub[X25519_KEY_SIZE];
+    curve25519_key* privkey;
 };
 
-static void x25519_create_keypair(uint8_t *priv, uint8_t *pub)
+static int wc_x25519_on_exchange(ptls_key_exchange_context_t **_ctx, int release, ptls_iovec_t *secret, ptls_iovec_t peerkey)
 {
-    ptls_minicrypto_random_bytes(priv, X25519_KEY_SIZE);
-    cf_curve25519_mul_base(pub, priv);
-}
-
-static int x25519_derive_secret(ptls_iovec_t *secret, const uint8_t *clientpriv, const uint8_t *clientpub,
-                                const uint8_t *serverpriv, const uint8_t *serverpub)
-{
-    if ((secret->base = malloc(X25519_KEY_SIZE)) == NULL)
-        return PTLS_ERROR_NO_MEMORY;
-
-    cf_curve25519_mul(secret->base, clientpriv != NULL ? clientpriv : serverpriv, clientpriv != NULL ? serverpub : clientpub);
-    secret->len = X25519_KEY_SIZE;
-    return 0;
-}
-
-static int x25519_on_exchange(ptls_key_exchange_context_t **_ctx, int release, ptls_iovec_t *secret, ptls_iovec_t peerkey)
-{
-    struct st_x25519_key_exchange_t *ctx = (struct st_x25519_key_exchange_t *)*_ctx;
+    struct st_wolf_x25519_key_exchange_t *ctx = (struct st_wolf_x25519_key_exchange_t *)*_ctx;
     int ret;
+    curve25519_key* peerX25519Key = NULL;
+    word32 secretLen = CURVE25519_KEYSIZE;
+
+    if (peerkey.len != CURVE25519_KEYSIZE) {
+        ret = PTLS_ALERT_DECRYPT_ERROR;
+        goto Exit;
+    }
 
     if (secret == NULL) {
         ret = 0;
         goto Exit;
     }
-
-    if (peerkey.len != X25519_KEY_SIZE) {
-        ret = PTLS_ALERT_DECRYPT_ERROR;
+    if ((secret->base = XMALLOC(CURVE25519_KEYSIZE, NULL, NULL)) == NULL){
+        ret = PTLS_ERROR_NO_MEMORY;
         goto Exit;
     }
-    ret = x25519_derive_secret(secret, ctx->priv, ctx->pub, NULL, peerkey.base);
+
+    peerX25519Key = (curve25519_key*)XMALLOC(sizeof(curve25519_key), NULL, NULL);
+    if (peerX25519Key == NULL) {
+        WOLFSSL_MSG("PeerEccKey Memory error");
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;
+    }
+    ret = wc_curve25519_init(peerX25519Key);
+    if (ret != 0) {
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;    
+    }
+
+    /* Point is validated by import function. */
+    if (wc_curve25519_import_public_ex(peerkey.base, peerkey.len, peerX25519Key, EC25519_LITTLE_ENDIAN) != 0) {
+        ret = ECC_PEERKEY_ERROR;
+        goto Exit;
+    }
+
+    ret = wc_curve25519_shared_secret_ex(ctx->privkey, peerX25519Key, secret->base, &secretLen, EC25519_LITTLE_ENDIAN);
+    secret->len = (size_t)secretLen;
 
 Exit:
+    if (peerX25519Key != NULL){
+        wc_curve25519_free(peerX25519Key);
+        XFREE(peerX25519Key, NULL, NULL);
+    }
+
     if (release) {
-        ptls_clear_memory(ctx->priv, sizeof(ctx->priv));
-        free(ctx);
+        wc_curve25519_free(ctx->privkey);
+        if (ctx->privkey != NULL){
+            XFREE(ctx->privkey, NULL, NULL);
+            ctx->privkey = NULL;
+        }
+        XFREE(ctx->super.pubkey.base, NULL, NULL);
+        XFREE(ctx, NULL, NULL);
         *_ctx = NULL;
     }
     return ret;
 }
 
-static int x25519_create_key_exchange(ptls_key_exchange_algorithm_t *algo, ptls_key_exchange_context_t **_ctx)
+static int wc_x25519_create_key_exchange(ptls_key_exchange_algorithm_t *algo, ptls_key_exchange_context_t **_ctx)
 {
-    struct st_x25519_key_exchange_t *ctx;
+    struct st_wolf_x25519_key_exchange_t *ctx;
+    byte*  keyData = NULL;
+    word32 dataSize = CURVE25519_KEYSIZE;
+    curve25519_key* key;
+    WC_RNG rng;
+    wc_InitRng(&rng);
+    int ret = 0;
 
-    if ((ctx = (struct st_x25519_key_exchange_t *)malloc(sizeof(*ctx))) == NULL)
+    if ((ctx = (struct st_wolf_x25519_key_exchange_t *)XMALLOC(sizeof(*ctx), NULL, NULL)) == NULL){
         return PTLS_ERROR_NO_MEMORY;
-    ctx->super = (ptls_key_exchange_context_t){algo, ptls_iovec_init(ctx->pub, sizeof(ctx->pub)), x25519_on_exchange};
-    x25519_create_keypair(ctx->priv, ctx->pub);
+    }
+    ctx->super = (ptls_key_exchange_context_t){algo, {NULL}, wc_x25519_on_exchange};
 
-    *_ctx = &ctx->super;
-    return 0;
-}
+    key = (curve25519_key*)XMALLOC(sizeof(curve25519_key), NULL, NULL);
+    if (key == NULL) {
+        WOLFSSL_MSG("EccTempKey Memory error");
+        return PTLS_ERROR_NO_MEMORY;
+    }
 
-static int x25519_key_exchange(ptls_key_exchange_algorithm_t *algo, ptls_iovec_t *pubkey, ptls_iovec_t *secret,
-                               ptls_iovec_t peerkey)
-{
-    uint8_t priv[X25519_KEY_SIZE], *pub = NULL;
-    int ret;
-
-    if (peerkey.len != X25519_KEY_SIZE) {
-        ret = PTLS_ALERT_DECRYPT_ERROR;
+    /* Make an Private key. */
+    if(wc_curve25519_init(key) != 0){
+        ret = ECC_EXPORT_ERROR;
         goto Exit;
     }
-    if ((pub = malloc(X25519_KEY_SIZE)) == NULL) {
+    ret = wc_curve25519_make_key(&rng, CURVE25519_KEYSIZE, key);
+    if (ret != 0) {
+        goto Exit;
+    }
+
+    /* Allocate space for the public key. */
+    keyData = (byte*)XMALLOC(CURVE25519_KEYSIZE, NULL, NULL);
+    if (keyData == NULL) {
+        WOLFSSL_MSG("Key data Memory error");
         ret = PTLS_ERROR_NO_MEMORY;
         goto Exit;
     }
 
-    x25519_create_keypair(priv, pub);
-    if ((ret = x25519_derive_secret(secret, NULL, peerkey.base, priv, pub)) != 0)
+    if (wc_curve25519_export_public_ex(key, keyData, &dataSize, EC25519_LITTLE_ENDIAN) != 0) {
+        ret = ECC_EXPORT_ERROR;
         goto Exit;
+    }
 
-    *pubkey = ptls_iovec_init(pub, X25519_KEY_SIZE);
-    ret = 0;
+    ctx->privkey = key;
+    ctx->super.pubkey.base = keyData;
+    ctx->super.pubkey.len = (size_t)dataSize;
 
 Exit:
-    ptls_clear_memory(priv, sizeof(priv));
-    if (pub != NULL && ret != 0)
-        ptls_clear_memory(pub, X25519_KEY_SIZE);
+    if(ret == 0){
+        *_ctx = &ctx->super;
+    } else {
+       if(keyData != NULL){
+            XFREE(keyData, NULL, NULL);
+        }
+        wc_curve25519_free(key);
+        if (key != NULL){
+            XFREE(key, NULL, NULL);
+            key = NULL;
+        }
+        XFREE(ctx, NULL, NULL);
+        *_ctx = NULL;
+    }
     return ret;
 }
-#endif /* Unimplemented */
+
+static int wc_x25519_key_exchange(ptls_key_exchange_algorithm_t *algo, ptls_iovec_t *pubkey, ptls_iovec_t *secret,
+                               ptls_iovec_t peerkey)
+{
+    curve25519_key* privKey = NULL;
+    curve25519_key* peerX25519Key = NULL;
+    word32 pubLen = CURVE25519_KEYSIZE;
+    word32 secretLen = CURVE25519_KEYSIZE;
+    WC_RNG rng;
+    wc_InitRng(&rng);
+    int ret;
+
+    *pubkey = (ptls_iovec_t){NULL};
+    *secret = (ptls_iovec_t){NULL};
+
+    if (peerkey.len != CURVE25519_KEYSIZE) {
+        ret = PTLS_ALERT_DECRYPT_ERROR;
+        goto Exit;
+    }
+
+    /* inport peerkey */
+    peerX25519Key = (curve25519_key*)XMALLOC(sizeof(curve25519_key), NULL, NULL);
+    if (peerX25519Key == NULL) {
+        WOLFSSL_MSG("PeerEccKey Memory error");
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;
+    }
+    ret = wc_curve25519_init(peerX25519Key);
+    if (ret != 0) {
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;    
+    }
+
+    /* Point is validated by import function. */
+    if (wc_curve25519_import_public_ex(peerkey.base, peerkey.len, peerX25519Key, EC25519_LITTLE_ENDIAN) != 0) {
+        ret = ECC_PEERKEY_ERROR;
+        goto Exit;
+    }
+
+    /* crease private key */
+    privKey = (curve25519_key*)XMALLOC(sizeof(curve25519_key), NULL, NULL);
+    if (privKey == NULL) {
+        WOLFSSL_MSG("EccTempKey Memory error");
+        return PTLS_ERROR_NO_MEMORY;
+    }
+    if(wc_curve25519_init(privKey) != 0){
+        ret = ECC_EXPORT_ERROR;
+        goto Exit;
+    }
+    ret = wc_curve25519_make_key(&rng, CURVE25519_KEYSIZE, privKey);
+    if (ret != 0) {
+        goto Exit;
+    }
+
+    /* export publickey from privatekey */
+    if ((pubkey->base = XMALLOC(CURVE25519_KEYSIZE, NULL, NULL)) == NULL){
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;
+    }
+    if (wc_curve25519_export_public_ex(privKey, pubkey->base, &pubLen, EC25519_LITTLE_ENDIAN) != 0) {
+        ret = ECC_EXPORT_ERROR;
+        goto Exit;
+    }
+    pubkey->len = (size_t)pubLen;
+
+    /* calculate secrets*/
+    if ((secret->base = XMALLOC(CURVE25519_KEYSIZE, NULL, NULL)) == NULL){
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;
+    }
+    ret = wc_curve25519_shared_secret_ex(privKey, peerX25519Key, secret->base, &secretLen, EC25519_LITTLE_ENDIAN);
+    secret->len = (size_t)secretLen;
+
+Exit:
+    wc_curve25519_free(privKey);
+    if (privKey != NULL){
+        XFREE(privKey, NULL, NULL);
+        privKey = NULL;
+    }
+    wc_curve25519_free(peerX25519Key);
+    if (peerX25519Key != NULL){
+        XFREE(peerX25519Key, NULL, NULL);
+        peerX25519Key = NULL;
+    }
+    if (ret != 0){
+        XFREE(pubkey->base, NULL, NULL);
+        *pubkey = (ptls_iovec_t){NULL};
+        XFREE(secret->base, NULL, NULL);
+        *secret = (ptls_iovec_t){NULL};
+    }
+    return ret;
+}
 
 struct wolfctr_context_t {
     ptls_cipher_context_t super;
     Aes wolf_aes;
 };
 
-static void aesctr_dispose(ptls_cipher_context_t *_ctx)
+static void wc_aesctr_dispose(ptls_cipher_context_t *_ctx)
 {
     struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
     ptls_clear_memory(ctx, sizeof(*ctx));
 }
 
-static void aesctr_init(ptls_cipher_context_t *_ctx, const void *iv)
+static void wc_aesctr_init(ptls_cipher_context_t *_ctx, const void *iv)
 {
     struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
     ctx->wolf_aes.left = 0;
@@ -151,49 +284,49 @@ static void aesctr_init(ptls_cipher_context_t *_ctx, const void *iv)
     wc_AesSetIV(&ctx->wolf_aes, iv);
 }
 
-static void aesctr_transform(ptls_cipher_context_t *_ctx, void *output, const void *input, size_t len)
+static void wc_aesctr_transform(ptls_cipher_context_t *_ctx, void *output, const void *input, size_t len)
 {
     struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
     wc_AesCtrEncrypt(&ctx->wolf_aes, output, input, len);
 }
 
-static int aesctr_setup_crypto(ptls_cipher_context_t *_ctx, int is_enc, const void *key, size_t key_size)
+static int wc_aesctr_setup_crypto(ptls_cipher_context_t *_ctx, int is_enc, const void *key, size_t key_size)
 {
     struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
-    ctx->super.do_dispose = aesctr_dispose;
-    ctx->super.do_init = aesctr_init;
-    ctx->super.do_transform = aesctr_transform;
+    ctx->super.do_dispose = wc_aesctr_dispose;
+    ctx->super.do_init = wc_aesctr_init;
+    ctx->super.do_transform = wc_aesctr_transform;
     wc_AesSetKeyDirect(&ctx->wolf_aes, key, key_size, NULL, AES_ENCRYPTION);
     return 0;
 }
 
 static int aes128ctr_setup_crypto(ptls_cipher_context_t *ctx, int is_enc, const void *key)
 {
-    return aesctr_setup_crypto(ctx, is_enc, key, PTLS_AES128_KEY_SIZE);
+    return wc_aesctr_setup_crypto(ctx, is_enc, key, PTLS_AES128_KEY_SIZE);
 }
 
 static int aes256ctr_setup_crypto(ptls_cipher_context_t *ctx, int is_enc, const void *key)
 {
-    return aesctr_setup_crypto(ctx, is_enc, key, PTLS_AES256_KEY_SIZE);
+    return wc_aesctr_setup_crypto(ctx, is_enc, key, PTLS_AES256_KEY_SIZE);
 }
 
-struct aesgcm_context_t {
+struct wolfgcm_context_t {
     ptls_aead_context_t super;
     Aes wolf_aes;
 };
 
-static void aesgcm_dispose_crypto(ptls_aead_context_t *_ctx)
+static void wc_aesgcm_dispose_crypto(ptls_aead_context_t *_ctx)
 {
-    struct aesgcm_context_t *ctx = (struct aesgcm_context_t *)_ctx;
+    struct wolfgcm_context_t *ctx = (struct wolfgcm_context_t *)_ctx;
 
     /* clear all memory except super */
     ptls_clear_memory((uint8_t *)ctx + sizeof(ctx->super), sizeof(*ctx) - sizeof(ctx->super));
 }
 
-static size_t aesgcm_encrypt(ptls_aead_context_t *_ctx, void *output, const void *input, size_t inlen, const void *iv,
+static size_t wc_aesgcm_encrypt(ptls_aead_context_t *_ctx, void *output, const void *input, size_t inlen, const void *iv,
                              const void *aad, size_t aadlen)
 {
-    struct aesgcm_context_t *ctx = (struct aesgcm_context_t *)_ctx;
+    struct wolfgcm_context_t *ctx = (struct wolfgcm_context_t *)_ctx;
 
     wc_AesGcmEncrypt(&ctx->wolf_aes, output, input, inlen, iv, PTLS_AESGCM_IV_SIZE, (byte *)output + inlen,
                         PTLS_AESGCM_TAG_SIZE, aad, aadlen);
@@ -201,10 +334,10 @@ static size_t aesgcm_encrypt(ptls_aead_context_t *_ctx, void *output, const void
     return inlen + PTLS_AESGCM_TAG_SIZE;
 }
 
-static size_t aesgcm_decrypt(ptls_aead_context_t *_ctx, void *output, const void *input, size_t inlen, const void *iv,
+static size_t wc_aesgcm_decrypt(ptls_aead_context_t *_ctx, void *output, const void *input, size_t inlen, const void *iv,
                              const void *aad, size_t aadlen)
 {
-    struct aesgcm_context_t *ctx = (struct aesgcm_context_t *)_ctx;
+    struct wolfgcm_context_t *ctx = (struct wolfgcm_context_t *)_ctx;
     int ret=0;
 
     if (inlen < PTLS_AESGCM_TAG_SIZE)
@@ -218,13 +351,13 @@ static size_t aesgcm_decrypt(ptls_aead_context_t *_ctx, void *output, const void
     return tag_offset;
 }
 
-static int aead_aesgcm_setup_crypto(ptls_aead_context_t *_ctx, int is_enc, const void *key, size_t key_size)
+static int wc_aead_aesgcm_setup_crypto(ptls_aead_context_t *_ctx, int is_enc, const void *key, size_t key_size)
 {
-    struct aesgcm_context_t *ctx = (struct aesgcm_context_t *)_ctx;
+    struct wolfgcm_context_t *ctx = (struct wolfgcm_context_t *)_ctx;
 
-    ctx->super.dispose_crypto = aesgcm_dispose_crypto;
+    ctx->super.dispose_crypto = wc_aesgcm_dispose_crypto;
     if (is_enc) {
-        ctx->super.do_encrypt = aesgcm_encrypt;
+        ctx->super.do_encrypt = wc_aesgcm_encrypt;
         ctx->super.do_encrypt_init = NULL;
         ctx->super.do_encrypt_update = NULL;
         ctx->super.do_encrypt_final = NULL;
@@ -234,7 +367,7 @@ static int aead_aesgcm_setup_crypto(ptls_aead_context_t *_ctx, int is_enc, const
         ctx->super.do_encrypt_init = NULL;
         ctx->super.do_encrypt_update = NULL;
         ctx->super.do_encrypt_final = NULL;
-        ctx->super.do_decrypt = aesgcm_decrypt;
+        ctx->super.do_decrypt = wc_aesgcm_decrypt;
     }
 
     wc_AesGcmSetKey(&ctx->wolf_aes, key, key_size);
@@ -243,12 +376,12 @@ static int aead_aesgcm_setup_crypto(ptls_aead_context_t *_ctx, int is_enc, const
 
 static int aead_aes128gcm_setup_crypto(ptls_aead_context_t *ctx, int is_enc, const void *key)
 {
-    return aead_aesgcm_setup_crypto(ctx, is_enc, key, PTLS_AES128_KEY_SIZE);
+    return wc_aead_aesgcm_setup_crypto(ctx, is_enc, key, PTLS_AES128_KEY_SIZE);
 }
 
 static int aead_aes256gcm_setup_crypto(ptls_aead_context_t *ctx, int is_enc, const void *key)
 {
-    return aead_aesgcm_setup_crypto(ctx, is_enc, key, PTLS_AES256_KEY_SIZE);
+    return wc_aead_aesgcm_setup_crypto(ctx, is_enc, key, PTLS_AES256_KEY_SIZE);
 }
 
 #if 0
@@ -423,35 +556,36 @@ static int aead_chacha20poly1305_setup_crypto(ptls_aead_context_t *_ctx, int is_
     return 0;
 }
 
-ptls_key_exchange_algorithm_t ptls_minicrypto_x25519 = {PTLS_GROUP_X25519, x25519_create_key_exchange, x25519_key_exchange};
 #endif /* Unimplemented */
 
 ptls_define_hash(sha256, wc_Sha256, wc_InitSha256, wc_Sha256Update, wc_Sha256Final);
 ptls_define_hash(sha384, wc_Sha384, wc_InitSha384, wc_Sha384Update, wc_Sha384Final);
+
+ptls_key_exchange_algorithm_t ptls_wolfcrypt_x25519 = {PTLS_GROUP_X25519, wc_x25519_create_key_exchange, wc_x25519_key_exchange};
 
 ptls_cipher_algorithm_t ptls_wolfcrypt_aes128ctr = {
     "AES128-CTR",          PTLS_AES128_KEY_SIZE, 1 /* block size */, PTLS_AES_IV_SIZE, sizeof(struct wolfctr_context_t),
     aes128ctr_setup_crypto};
 ptls_aead_algorithm_t ptls_wolfcrypt_aes128gcm = {
     "AES128-GCM",        &ptls_wolfcrypt_aes128ctr, NULL,      PTLS_AES128_KEY_SIZE,
-    PTLS_AESGCM_IV_SIZE, PTLS_AESGCM_TAG_SIZE,       sizeof(struct aesgcm_context_t), aead_aes128gcm_setup_crypto};
+    PTLS_AESGCM_IV_SIZE, PTLS_AESGCM_TAG_SIZE,       sizeof(struct wolfgcm_context_t), aead_aes128gcm_setup_crypto};
 ptls_cipher_algorithm_t ptls_wolfcrypt_aes256ctr = {
     "AES256-CTR",          PTLS_AES256_KEY_SIZE, 1 /* block size */, PTLS_AES_IV_SIZE, sizeof(struct wolfctr_context_t),
     aes256ctr_setup_crypto};
 ptls_aead_algorithm_t ptls_wolfcrypt_aes256gcm = {
     "AES256-GCM",        &ptls_wolfcrypt_aes256ctr, NULL,      PTLS_AES256_KEY_SIZE,
-    PTLS_AESGCM_IV_SIZE, PTLS_AESGCM_TAG_SIZE,       sizeof(struct aesgcm_context_t), aead_aes256gcm_setup_crypto};
+    PTLS_AESGCM_IV_SIZE, PTLS_AESGCM_TAG_SIZE,       sizeof(struct wolfgcm_context_t), aead_aes256gcm_setup_crypto};
 
 ptls_hash_algorithm_t ptls_wolfcrypt_sha256 = {PTLS_SHA256_BLOCK_SIZE, PTLS_SHA256_DIGEST_SIZE, sha256_create,
                                                 PTLS_ZERO_DIGEST_SHA256};
 ptls_hash_algorithm_t ptls_wolfcrypt_sha384 = {PTLS_SHA384_BLOCK_SIZE, PTLS_SHA384_DIGEST_SIZE, sha384_create,
                                                 PTLS_ZERO_DIGEST_SHA384};
 #if 0
-ptls_cipher_algorithm_t ptls_minicrypto_chacha20 = {
+ptls_cipher_algorithm_t ptls_wolfcrypt_chacha20 = {
     "CHACHA20",           PTLS_CHACHA20_KEY_SIZE, 1 /* block size */, PTLS_CHACHA20_IV_SIZE, sizeof(struct chacha20_context_t),
     chacha20_setup_crypto};
-ptls_aead_algorithm_t ptls_minicrypto_chacha20poly1305 = {"CHACHA20-POLY1305",
-                                                          &ptls_minicrypto_chacha20,
+ptls_aead_algorithm_t ptls_wolfcrypt_chacha20poly1305 = {"CHACHA20-POLY1305",
+                                                          &ptls_wolfcrypt_chacha20,
                                                           NULL,
                                                           PTLS_CHACHA20_KEY_SIZE,
                                                           PTLS_CHACHA20POLY1305_IV_SIZE,
@@ -466,8 +600,8 @@ ptls_cipher_suite_t ptls_wolfcrypt_aes256gcmsha384 = {PTLS_CIPHER_SUITE_AES_256_
                                                        &ptls_wolfcrypt_sha384};
 
 #if 0
-ptls_cipher_suite_t ptls_minicrypto_chacha20poly1305sha256 = {PTLS_CIPHER_SUITE_CHACHA20_POLY1305_SHA256,
-                                                              &ptls_minicrypto_chacha20poly1305, &ptls_minicrypto_sha256};
+ptls_cipher_suite_t ptls_wolfcrypt_chacha20poly1305sha256 = {PTLS_CIPHER_SUITE_CHACHA20_POLY1305_SHA256,
+                                                              &ptls_wolfcrypt_chacha20poly1305, &ptls_wolfcrypt_sha256};
 #endif /* Unimplemented */
 
 ptls_cipher_suite_t *ptls_wolfcrypt_cipher_suites[] = {&ptls_wolfcrypt_aes256gcmsha384, &ptls_wolfcrypt_aes128gcmsha256

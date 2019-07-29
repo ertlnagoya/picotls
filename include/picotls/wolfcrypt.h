@@ -37,6 +37,9 @@ extern ptls_hash_algorithm_t ptls_wolfcrypt_sha256, ptls_wolfcrypt_sha384;
 extern ptls_cipher_suite_t ptls_wolfcrypt_aes128gcmsha256, ptls_wolfcrypt_aes256gcmsha384;
 extern ptls_cipher_suite_t *ptls_wolfcrypt_cipher_suites[];
 
+extern ptls_key_exchange_algorithm_t ptls_wolfcrypt_x25519; //ptls_wolfcrypt_secp256r1
+extern ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[];
+
 #if 0
 #define SECP256R1_PRIVATE_KEY_SIZE 32
 #define SECP256R1_PUBLIC_KEY_SIZE 65 /* including the header */
@@ -52,8 +55,6 @@ void ptls_wolfcrypt_random_bytes(void *buf, size_t len);
 int ptls_wolfcrypt_init_secp256r1sha256_sign_certificate(ptls_wolfcrypt_secp256r1sha256_sign_certificate_t *self,
                                                           ptls_iovec_t key);
 
-extern ptls_key_exchange_algorithm_t ptls_wolfcrypt_secp256r1, ptls_wolfcrypt_x25519;
-extern ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[];
 extern ptls_cipher_algorithm_t ptls_wolfcrypt_chacha20;
 extern ptls_aead_algorithm_t ptls_wolfcrypt_chacha20poly1305;
 extern ptls_cipher_suite_t ptls_wolfcrypt_chacha20poly1305sha256;
