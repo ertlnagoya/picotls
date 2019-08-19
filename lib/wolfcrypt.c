@@ -571,7 +571,22 @@ static int aes256ctr_setup_crypto(ptls_cipher_context_t *ctx, int is_enc, const 
 struct wolfgcm_context_t {
     ptls_aead_context_t super;
     Aes wolf_aes;
+    byte initialCounter[AES_BLOCK_SIZE];
+    void* aad;
+    size_t aadlen;
+    size_t clen;
 };
+
+static WC_INLINE void IncrementCounter(byte* inOutCtr)
+{
+    int i;
+
+    /* in network byte order so start at end and work back */
+    for (i = AES_BLOCK_SIZE - 1; i >= AES_BLOCK_SIZE - CTR_SZ; i--) {
+        if (++inOutCtr[i])  /* we're done unless we overflow */
+            return;
+    }
+}
 
 static void wc_aesgcm_dispose_crypto(ptls_aead_context_t *_ctx)
 {
@@ -581,15 +596,48 @@ static void wc_aesgcm_dispose_crypto(ptls_aead_context_t *_ctx)
     ptls_clear_memory((uint8_t *)ctx + sizeof(ctx->super), sizeof(*ctx) - sizeof(ctx->super));
 }
 
-static size_t wc_aesgcm_encrypt(ptls_aead_context_t *_ctx, void *output, const void *input, size_t inlen, const void *iv,
-                             const void *aad, size_t aadlen)
+static void wc_aesgcm_encrypt_init(ptls_aead_context_t *_ctx, const void *iv, const void *aad, size_t aadlen)
 {
     struct wolfgcm_context_t *ctx = (struct wolfgcm_context_t *)_ctx;
 
-    wc_AesGcmEncrypt(&ctx->wolf_aes, output, input, inlen, iv, PTLS_AESGCM_IV_SIZE, (byte *)output + inlen,
-                        PTLS_AESGCM_TAG_SIZE, aad, aadlen);
+    ctx->clen = 0;
+    ctx->aad = XMALLOC(aadlen, NULL, NULL);
+    XMEMCPY(ctx->aad, aad, aadlen);
+    ctx->aadlen = aadlen;
 
-    return inlen + PTLS_AESGCM_TAG_SIZE;
+    /* initialCounter = = IV || 0^31 || 1 */
+    XMEMSET(ctx->initialCounter, 0, AES_BLOCK_SIZE);
+    XMEMCPY(ctx->initialCounter, iv, PTLS_AESGCM_IV_SIZE);
+    ctx->initialCounter[AES_BLOCK_SIZE - 1] = 1;
+
+    /* Set counter */
+    wc_AesSetIV(&ctx->wolf_aes, ctx->initialCounter);
+    IncrementCounter((byte *)ctx->wolf_aes.reg);
+}
+
+static size_t wc_aesgcm_encrypt_update(ptls_aead_context_t *_ctx, void *output, const void *input, size_t inlen)
+{
+    struct wolfgcm_context_t *ctx = (struct wolfgcm_context_t *)_ctx;
+
+    wc_AesCtrEncrypt(&ctx->wolf_aes, output, input, inlen);
+
+    ctx->clen += inlen;
+    return inlen;
+}
+
+static size_t wc_aesgcm_encrypt_final(ptls_aead_context_t *_ctx, void *output)
+{
+    struct wolfgcm_context_t *ctx = (struct wolfgcm_context_t *)_ctx;
+    byte scratch[AES_BLOCK_SIZE];
+
+    GHASH(&ctx->wolf_aes, ctx->aad, ctx->aadlen, (byte *)output - ctx->clen, ctx->clen,
+            (byte *)output, PTLS_AESGCM_TAG_SIZE);
+    wc_AesEncryptDirect(&ctx->wolf_aes, scratch, ctx->initialCounter);
+    xorbuf(output, scratch, PTLS_AESGCM_TAG_SIZE);
+
+    ctx->wolf_aes.left = 0;
+    XFREE(ctx->aad, NULL, NULL);
+    return PTLS_AESGCM_TAG_SIZE;
 }
 
 static size_t wc_aesgcm_decrypt(ptls_aead_context_t *_ctx, void *output, const void *input, size_t inlen, const void *iv,
@@ -615,13 +663,11 @@ static int wc_aead_aesgcm_setup_crypto(ptls_aead_context_t *_ctx, int is_enc, co
 
     ctx->super.dispose_crypto = wc_aesgcm_dispose_crypto;
     if (is_enc) {
-        ctx->super.do_encrypt = wc_aesgcm_encrypt;
-        ctx->super.do_encrypt_init = NULL;
-        ctx->super.do_encrypt_update = NULL;
-        ctx->super.do_encrypt_final = NULL;
+        ctx->super.do_encrypt_init = wc_aesgcm_encrypt_init;
+        ctx->super.do_encrypt_update = wc_aesgcm_encrypt_update;
+        ctx->super.do_encrypt_final = wc_aesgcm_encrypt_final;
         ctx->super.do_decrypt = NULL;
     } else {
-        ctx->super.do_encrypt = NULL;
         ctx->super.do_encrypt_init = NULL;
         ctx->super.do_encrypt_update = NULL;
         ctx->super.do_encrypt_final = NULL;
