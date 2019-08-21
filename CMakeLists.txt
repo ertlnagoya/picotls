@@ -45,6 +45,9 @@ IF (BROTLI_DEC_FOUND AND BROTLI_ENC_FOUND)
     LIST(APPEND CORE_EXTRA_LIBS ${BROTLI_DEC_LIBRARIES} ${BROTLI_ENC_LIBRARIES})
 ENDIF ()
 
+FIND_LIBRARY(WOLFSSL_LIBRARY NAMES libwolf.a PATHS ${PROJECT_SOURCE_DIR}/../wolfSSL-lib/build)
+MESSAGE(STATUS "Found wolfssl at : ${WOLFSSL_LIBRARY} " )
+
 ADD_LIBRARY(picotls-core ${CORE_FILES})
 TARGET_LINK_LIBRARIES(picotls-core ${CORE_EXTRA_LIBS})
 ADD_LIBRARY(picotls-minicrypto ${MINICRYPTO_LIBRARY_FILES} lib/cifra.c lib/minicrypto-pem.c lib/uecc.c lib/asn1.c lib/ffx.c)
@@ -56,10 +59,6 @@ ADD_EXECUTABLE(test-minicrypto.t ${MINICRYPTO_LIBRARY_FILES} deps/picotest/picot
 
 SET(TEST_EXES test-minicrypto.t)
 
-FIND_LIBRARY(WOLFSSL_LIBRARY NAMES libwolf.a PATHS ${PROJECT_SOURCE_DIR}/../wolfSSL-lib/build)
-MESSAGE(STATUS "Found wolfssl at : ${WOLFSSL_LIBRARY} " )
-
-INCLUDE_DIRECTORIES(${WOLFSSL_INCLUDE_DIR})
 ADD_LIBRARY(picotls-openssl lib/openssl.c)
 TARGET_LINK_LIBRARIES(picotls-openssl ${WOLFSSL_LIBRARY} picotls-core ${CMAKE_DL_LIBS} m)
 ADD_EXECUTABLE(cli t/cli.c lib/pembase64.c)
@@ -71,6 +70,9 @@ SET_TARGET_PROPERTIES(test-openssl.t PROPERTIES COMPILE_FLAGS "-DPTLS_MEMORY_DEB
 TARGET_LINK_LIBRARIES(test-openssl.t ${WOLFSSL_LIBRARY} ${CMAKE_DL_LIBS} m)
 SET(TEST_EXES ${TEST_EXES} test-openssl.t)
 
+ADD_EXECUTABLE(test-wolfcrypt.t ${MINICRYPTO_LIBRARY_FILES} deps/picotest/picotest.c t/picotls.c t/wolfcrypt.c lib/cifra.c lib/uecc.c lib/asn1.c lib/pembase64.c lib/ffx.c)
+TARGET_LINK_LIBRARIES(test-wolfcrypt.t picotls-openssl ${WOLFSSL_LIBRARY} m)
+SET(TEST_EXES test-wolfcrypt.t)
 
 ADD_CUSTOM_TARGET(check env BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR} prove --exec '' -v ${CMAKE_CURRENT_BINARY_DIR}/*.t t/*.t WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${TEST_EXES} cli)
 

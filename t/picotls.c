@@ -1311,6 +1311,26 @@ void test_picotls(void)
     subtest("handshake", test_all_handshakes);
 }
 
+void test_picotls_wolf(void)
+{
+    subtest("is_ipaddr", test_is_ipaddr);
+    subtest("sha256", test_sha256);
+    subtest("sha384", test_sha384);
+    subtest("hmac-sha256", test_hmac_sha256);
+    subtest("hkdf", test_hkdf);
+    subtest("aes128gcm", test_aes128gcm);
+    subtest("aes256gcm", test_aes256gcm);
+    //subtest("chacha20poly1305", test_chacha20poly1305);
+    //subtest("aes128ecb", test_aes128ecb);
+    //subtest("aes256ecb", test_aes256ecb);
+    subtest("aes128ctr", test_aes128ctr);
+    //subtest("chacha20", test_chacha20);
+    subtest("ffx", test_ffx);
+    subtest("base64-decode", test_base64_decode);
+    subtest("fragmented-message", test_fragmented_message);
+    subtest("handshake", test_all_handshakes);
+}
+
 void test_picotls_esni(ptls_key_exchange_context_t **keys)
 {
     ptls_esni_context_t esni, *esni_list[] = {&esni, NULL};
