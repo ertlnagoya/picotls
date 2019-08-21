@@ -25,18 +25,14 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "wolfssl/openssl/err.h"
-#include "wolfssl/openssl/evp.h"
-#include "wolfssl/ssl.h"
-// #include <openssl/bio.h>
-// #include <openssl/pem.h>
-// #include <openssl/engine.h>
+#include <openssl/bio.h>
+#include <openssl/pem.h>
+#include <openssl/engine.h>
 #include "picotls.h"
 #include "picotls/minicrypto.h"
 #include "../deps/picotest/picotest.h"
 #include "../lib/openssl.c"
 #include "test.h"
-#define OPENSSL_NO_ENGINE
 
 #define RSA_PRIVATE_KEY                                                                                                            \
     "-----BEGIN RSA PRIVATE KEY-----\n"                                                                                            \
@@ -157,8 +153,7 @@ static void test_ecdsa_sign(void)
         EC_KEY *eckey = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
         EC_KEY_generate_key(eckey);
         pkey = EVP_PKEY_new();
-        pkey->pkey.ptr = (void *)eckey;
-        //EVP_PKEY_set1_EC_KEY(pkey, eckey);
+        EVP_PKEY_set1_EC_KEY(pkey, eckey);
         EC_KEY_free(eckey);
     }
 
@@ -202,7 +197,7 @@ static ptls_key_exchange_context_t *key_from_pem(const char *pem)
 static void test_cert_verify(void)
 {
     X509 *cert = x509_from_pem(RSA_CERTIFICATE);
-    STACK_OF(X509) *chain = sk_X509_new();
+    STACK_OF(X509) *chain = sk_X509_new_null();
     X509_STORE *store = X509_STORE_new();
     int ret;
 
@@ -285,8 +280,7 @@ int main(int argc, char **argv)
     setup_certificate(&cert);
     setup_sign_certificate(&openssl_sign_certificate);
     X509_STORE *cert_store = X509_STORE_new();
-    //cert_store->verify_cb = verify_cert_cb;
-    //X509_STORE_set_verify_cb(cert_store, verify_cert_cb);
+    X509_STORE_set_verify_cb(cert_store, verify_cert_cb);
     ptls_openssl_init_verify_certificate(&openssl_verify_certificate, cert_store);
     /* we should call X509_STORE_free on OpenSSL 1.1 or in prior versions decrement refount then call _free */
     ptls_context_t openssl_ctx = {ptls_openssl_random_bytes,
