@@ -471,6 +471,24 @@ int main(int argc, char **argv)
     subtest("x25519", test_wolf_25519_key_exchange);
     //subtest("secp256r1-sign", test_secp256r1_sign);
 
+    ptls_iovec_t cert2 = ptls_iovec_init(SECP256R1_CERTIFICATE, sizeof(SECP256R1_CERTIFICATE) - 1);
+
+    ptls_minicrypto_secp256r1sha256_sign_certificate_t sign_certificate;
+    ptls_minicrypto_init_secp256r1sha256_sign_certificate(&sign_certificate,
+                                                          ptls_iovec_init(SECP256R1_PRIVATE_KEY, SECP256R1_PRIVATE_KEY_SIZE));
+
+    ptls_context_t wolfcrypt_ctx2 = {ptls_minicrypto_random_bytes,
+                                    &ptls_get_time,
+                                    ptls_wolfcrypt_key_exchanges,
+                                    ptls_wolfcrypt_cipher_suites,
+                                    {&cert2, 1},
+                                    NULL,
+                                    NULL,
+                                    NULL,
+                                    &sign_certificate.super};
+    ctx = ctx_peer = &wolfcrypt_ctx2;
+    ADD_FFX_AES128_ALGORITHMS(wolfcrypt);
+
     ptls_minicrypto_secp256r1sha256_sign_certificate_t minicrypto_sign_certificate;
     ptls_iovec_t minicrypto_certificate = ptls_iovec_init(SECP256R1_CERTIFICATE, sizeof(SECP256R1_CERTIFICATE) - 1);
     ptls_minicrypto_init_secp256r1sha256_sign_certificate(
@@ -484,18 +502,6 @@ int main(int argc, char **argv)
                                      NULL,
                                      NULL,
                                      &minicrypto_sign_certificate.super};
-
-    ptls_iovec_t cert2 = ptls_iovec_init(SECP256R1_CERTIFICATE, sizeof(SECP256R1_CERTIFICATE) - 1);
-
-    ptls_context_t wolfcrypt_ctx2 = {ptls_minicrypto_random_bytes,
-                                    &ptls_get_time,
-                                    ptls_wolfcrypt_key_exchanges,
-                                    ptls_wolfcrypt_cipher_suites,
-                                    {&cert2, 1},
-                                    NULL,
-                                    NULL,
-                                    NULL,
-                                    &minicrypto_sign_certificate.super};
 
     ctx = &wolfcrypt_ctx2;
     ctx_peer = &minicrypto_ctx;
