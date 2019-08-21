@@ -611,6 +611,7 @@ static void wc_aesgcm_encrypt_init(ptls_aead_context_t *_ctx, const void *iv, co
     ctx->initialCounter[AES_BLOCK_SIZE - 1] = 1;
 
     /* Set counter */
+    ctx->wolf_aes.left = 0;
     wc_AesSetIV(&ctx->wolf_aes, ctx->initialCounter);
     IncrementCounter((byte *)ctx->wolf_aes.reg);
 }
@@ -635,7 +636,6 @@ static size_t wc_aesgcm_encrypt_final(ptls_aead_context_t *_ctx, void *output)
     wc_AesEncryptDirect(&ctx->wolf_aes, scratch, ctx->initialCounter);
     xorbuf(output, scratch, PTLS_AESGCM_TAG_SIZE);
 
-    ctx->wolf_aes.left = 0;
     XFREE(ctx->aad, NULL, NULL);
     return PTLS_AESGCM_TAG_SIZE;
 }
