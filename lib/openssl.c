@@ -111,8 +111,7 @@ size_t HMAC_size(const HMAC_CTX *ctx)
 }
 
 size_t EC_POINT_point2oct(const EC_GROUP *group, const EC_POINT *p,
-                          int form,
-                          unsigned char *buf, size_t len, BN_CTX *ctx){
+                          int form, unsigned char *buf, size_t len, BN_CTX *ctx){
 	return 0;
 }
 
