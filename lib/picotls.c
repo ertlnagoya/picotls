@@ -1319,7 +1319,7 @@ Exit:
 static int send_finished(ptls_t *tls, ptls_message_emitter_t *emitter)
 {
     int ret;
-    PTLS_DEBUG("Sending Finished\n");    
+    PTLS_DEBUG("Sending Finished\n");
     ptls_push_message(emitter, tls->key_schedule, PTLS_HANDSHAKE_TYPE_FINISHED, {
         if ((ret = ptls_buffer_reserve(emitter->buf, tls->key_schedule->hashes[0].algo->digest_size)) != 0)
             goto Exit;
@@ -2294,7 +2294,7 @@ static int client_handle_encrypted_extensions(ptls_t *tls, ptls_iovec_t message,
     uint16_t type;
     ptls_raw_extension_t unknown_extensions[MAX_UNKNOWN_EXTENSIONS + 1];
     int ret, skip_early_data = 1;
-        PTLS_DEBUG("Receiving EncryptedExtensions\n");
+    PTLS_DEBUG("Receiving EncryptedExtensions\n");
     unknown_extensions[0].type = UINT16_MAX;
 
     decode_extensions(src, end, PTLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS, &type, {
@@ -2476,12 +2476,12 @@ static int send_certificate_and_certificate_verify(ptls_t *tls, ptls_message_emi
     }
 
     /* send Certificate (or the equivalent) */
-    PTLS_DEBUG("Sending Certificate\n");    
+    PTLS_DEBUG("Sending Certificate\n");
     if ((ret = emit_certificate->cb(emit_certificate, tls, emitter, tls->key_schedule, context, push_status_request)) != 0)
         goto Exit;
 
     /* build and send CertificateVerify */
-    PTLS_DEBUG("Sending CertificateVerify\n");    
+    PTLS_DEBUG("Sending CertificateVerify\n");
     if (tls->ctx->sign_certificate != NULL) {
         ptls_push_message(emitter, tls->key_schedule, PTLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY, {
             ptls_buffer_t *sendbuf = emitter->buf;
@@ -3752,7 +3752,7 @@ static int server_handle_hello(ptls_t *tls, ptls_message_emitter_t *emitter, ptl
     }
 
     /* send EncryptedExtensions */
-    PTLS_DEBUG("Sending EncryptedExtensions\n");    
+    PTLS_DEBUG("Sending EncryptedExtensions\n");
     ptls_push_message(emitter, tls->key_schedule, PTLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS, {
         ptls_buffer_t *sendbuf = emitter->buf;
         ptls_buffer_push_block(sendbuf, 2, {

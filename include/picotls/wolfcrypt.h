@@ -29,8 +29,6 @@ extern "C" {
 #include "userq_settings.h"
 #include "picotls.h"
 
-#define O_CLOEXEC 0
-
 #if defined(USE_WOLFSSL_AEAD)
 extern ptls_cipher_algorithm_t ptls_wolfcrypt_aes128ctr, ptls_wolfcrypt_aes256ctr;
 extern ptls_aead_algorithm_t ptls_wolfcrypt_aes128gcm, ptls_wolfcrypt_aes256gcm;
