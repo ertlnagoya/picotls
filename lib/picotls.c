@@ -4930,9 +4930,15 @@ int (*volatile ptls_mem_equal)(const void *x, const void *y, size_t len) = mem_e
 
 static uint64_t get_time(ptls_get_time_t *self)
 {
+#if defined USE_LWIP
+    SYSUTM utime;
+    get_utm(&utime);
+    return (uint64_t)utime / 1000;
+#else
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+#endif
 }
 
 ptls_get_time_t ptls_get_time = {get_time};
