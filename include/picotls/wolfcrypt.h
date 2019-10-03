@@ -47,6 +47,9 @@ extern ptls_key_exchange_algorithm_t ptls_wolfcrypt_x25519, ptls_wolfcrypt_secp2
 extern ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[];
 #endif /* USE_WOLFSSL_KX */
 
+#ifdef NO_FILESYSTEM
+int wolfcrypt_load_certificates(ptls_context_t *ctx); 
+#endif
 #if 0
 
 typedef struct st_ptls_wolfcrypt_secp256r1sha256_sign_certificate_t {
