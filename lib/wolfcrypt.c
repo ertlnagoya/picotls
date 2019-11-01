@@ -40,7 +40,7 @@
     #include <wolfcrypt/src/misc.c>
 #endif
 
-#include "userq_settings.h"
+#include "picotls_settings.h"
 #include "picotls.h"
 #include "picotls/wolfcrypt.h"
 
@@ -48,7 +48,7 @@ void ptls_wolfcrypt_random_bytes(void *buf, size_t len)
 {
     int ret = wolfSSL_RAND_bytes(buf, (int)len);
     if (ret != 1) {
-        //fprintf(stderr, "RAND_bytes() failed with code: %d\n", ret);
+        WOLFSSL_MSG("RAND_bytes() failed");
     }
 }
 

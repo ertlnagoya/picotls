@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-#include "userq_settings.h"
+#include "picotls_settings.h"
 #include "picotls.h"
 
 #if defined(USE_WOLFSSL_AEAD)

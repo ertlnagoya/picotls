@@ -29,7 +29,7 @@ extern "C" {
 #include <assert.h>
 #include <inttypes.h>
 #include <sys/types.h>
-#include <userq_settings.h>
+#include <picotls_settings.h>
 
 #ifndef PTLS_FUZZ_HANDSHAKE
 #define PTLS_FUZZ_HANDSHAKE 0
