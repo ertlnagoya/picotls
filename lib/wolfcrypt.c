@@ -557,7 +557,7 @@ Exit:
 }
 
 ptls_key_exchange_algorithm_t ptls_wolfcrypt_secp256r1 = {PTLS_GROUP_SECP256R1, wc_secp256r1_create_key_exchange, wc_secp256r1_key_exchange};
-ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[] = {&ptls_wolfcrypt_secp256r1, NULL};
+ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[] = {&ptls_wolfcrypt_secp256r1, &ptls_wolfcrypt_x25519, NULL};
 
 ptls_key_exchange_algorithm_t ptls_wolfcrypt_x25519 = {PTLS_GROUP_X25519, wc_x25519_create_key_exchange, wc_x25519_key_exchange};
 #endif /* USE_WOLFSSL_KX */
