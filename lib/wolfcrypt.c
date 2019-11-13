@@ -40,14 +40,62 @@
     #include <wolfcrypt/src/misc.c>
 #endif
 
-#include "user_settings.h"
+#include "picotls_settings.h"
 #include "picotls.h"
 #include "picotls/wolfcrypt.h"
 
 void ptls_wolfcrypt_random_bytes(void *buf, size_t len)
 {
-    return;
+    int ret = wolfSSL_RAND_bytes(buf, (int)len);
+    if (ret != 1) {
+        WOLFSSL_MSG("RAND_bytes() failed");
+    }
 }
+
+static X509 *x509_from_pem_buffer(const char *pem)
+{
+    BIO *bio = BIO_new_mem_buf((void *)pem, (int)strlen(pem));
+    X509 *cert = PEM_read_bio_X509(bio, NULL, NULL, NULL);
+    assert(cert != NULL && "failed to load certificate");
+    BIO_free(bio);
+    return cert;
+}
+
+static int setup_certificate_buffer(const char* certbuf, ptls_iovec_t *dst, size_t *nb_objects)
+{
+    int ret = 0;
+    X509 *cert = x509_from_pem_buffer(certbuf);
+
+    dst->base = NULL;
+    dst->len = i2d_X509(cert, &dst->base);
+    *nb_objects += 1;
+
+    if(dst->base == NULL){
+        ret = -1;
+    }
+
+    X509_free(cert);
+    return ret;
+}
+
+#define WOLF_MAX_CERTS_IN_CONTEXT 16
+
+#ifdef NO_FILESYSTEM
+int wolfcrypt_load_certificates(ptls_context_t *ctx)
+{
+    int ret = 0;
+
+    ctx->certificates.list = (ptls_iovec_t *)malloc(WOLF_MAX_CERTS_IN_CONTEXT * sizeof(ptls_iovec_t));
+
+    if (ctx->certificates.list == NULL) {
+        ret = PTLS_ERROR_NO_MEMORY;
+    } else {
+        ret = setup_certificate_buffer(TLS_ECDSA_CERT, ctx->certificates.list, &ctx->certificates.count);
+    }
+
+    return ret;
+}
+#endif
 
 #if defined(USE_WOLFSSL_KX)
 
@@ -509,7 +557,7 @@ Exit:
 }
 
 ptls_key_exchange_algorithm_t ptls_wolfcrypt_secp256r1 = {PTLS_GROUP_SECP256R1, wc_secp256r1_create_key_exchange, wc_secp256r1_key_exchange};
-ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[] = {&ptls_wolfcrypt_secp256r1, NULL};
+ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[] = {&ptls_wolfcrypt_secp256r1, &ptls_wolfcrypt_x25519, NULL};
 
 ptls_key_exchange_algorithm_t ptls_wolfcrypt_x25519 = {PTLS_GROUP_X25519, wc_x25519_create_key_exchange, wc_x25519_key_exchange};
 #endif /* USE_WOLFSSL_KX */
@@ -539,7 +587,6 @@ static void wc_aesctr_init(ptls_cipher_context_t *_ctx, const void *iv)
 {
     struct wolfctr_context_t *ctx = (struct wolfctr_context_t *)_ctx;
     ctx->wolf_aes.left = 0;
-    memset(ctx->wolf_aes.tmp ,0 ,AES_BLOCK_SIZE);
     wc_AesSetIV(&ctx->wolf_aes, iv);
 }
 

@@ -47,14 +47,18 @@ extern ptls_key_exchange_algorithm_t ptls_wolfcrypt_x25519, ptls_wolfcrypt_secp2
 extern ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[];
 #endif /* USE_WOLFSSL_KX */
 
+#ifdef NO_FILESYSTEM
+int wolfcrypt_load_certificates(ptls_context_t *ctx); 
+#endif
+
+void ptls_wolfcrypt_random_bytes(void *buf, size_t len);
+
 #if 0
 
 typedef struct st_ptls_wolfcrypt_secp256r1sha256_sign_certificate_t {
     ptls_sign_certificate_t super;
     uint8_t key[SECP256R1_PRIVATE_KEY_SIZE];
 } ptls_wolfcrypt_secp256r1sha256_sign_certificate_t;
-
-void ptls_wolfcrypt_random_bytes(void *buf, size_t len);
 
 int ptls_wolfcrypt_init_secp256r1sha256_sign_certificate(ptls_wolfcrypt_secp256r1sha256_sign_certificate_t *self,
                                                           ptls_iovec_t key);
