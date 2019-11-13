@@ -19,7 +19,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-#include <user_settings.h>
+#include "picotls_settings.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>

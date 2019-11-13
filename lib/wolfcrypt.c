@@ -24,6 +24,7 @@
 #endif
 #include <errno.h>
 
+#include <wolfssl/ssl.h>
 #include <wolfssl/error-ssl.h>
 #include <wolfssl/internal.h>
 #include <wolfssl/wolfcrypt/logging.h>
