@@ -160,6 +160,13 @@ static int handle_connection(int sockfd, ptls_context_t *ctx, const char *server
                     if ((ret = ptls_receive(tls, &rbuf, bytebuf + off, &leftlen)) == 0) {
                         if (rbuf.off != 0) {
                             write(1, rbuf.base, rbuf.off);
+                            if (strncmp((char *)rbuf.base, "GET", 3) == 0) {
+                                                const char resp[] = 
+                                                "<html><head><title>Bad Request</title></head><body>Bad request. Why don't you try \"GET /doc-456789.html\"?</body></html>\n";
+                                ret = ptls_send(tls, &encbuf, resp, strlen(resp));
+                                //(void)write(sockfd, ptbuf.base, ptbuf.off);
+                                //ptbuf.off = 0;
+                            }
                             rbuf.off = 0;
                         }
                     } else if (ret == PTLS_ERROR_IN_PROGRESS) {
@@ -224,9 +231,20 @@ static int handle_connection(int sockfd, ptls_context_t *ctx, const char *server
 
         /* close the sender side when necessary */
         if (state == IN_1RTT && inputfd == -1) {
-            /* FIXME send close_alert */
+
+            ptls_buffer_t wbuf;
+            uint8_t wbuf_small[32];
+            ptls_buffer_init(&wbuf, wbuf_small, sizeof(wbuf_small));
+            if ((ret = ptls_send_alert(tls, &wbuf,
+                       PTLS_ALERT_LEVEL_WARNING, PTLS_ALERT_CLOSE_NOTIFY)) != 0) {
+                fprintf(stderr, "ptls_send_alert:%d\n", ret);
+            }
+            if (wbuf.off != 0)
+                (void)write(sockfd, wbuf.base, wbuf.off);
+            ptls_buffer_dispose(&wbuf);
             shutdown(sockfd, SHUT_WR);
             state = IN_SHUTDOWN;
+
         }
     }
 
@@ -246,6 +264,7 @@ static int run_server(struct sockaddr *sa, socklen_t salen, ptls_context_t *ctx,
                       ptls_handshake_properties_t *hsprop, int request_key_update)
 {
     int listen_fd, conn_fd, on = 1;
+    ((struct sockaddr_in *) sa)->sin_addr.s_addr = htonl(INADDR_ANY);
 
     if ((listen_fd = socket(sa->sa_family, SOCK_STREAM, 0)) == -1) {
         perror("socket(2) failed");
@@ -264,7 +283,9 @@ static int run_server(struct sockaddr *sa, socklen_t salen, ptls_context_t *ctx,
         return 1;
     }
 
+    fprintf(stderr, "server started on port %d\n", ntohs(((struct sockaddr_in *) sa)->sin_port));
     while (1) {
+        fprintf(stderr, "waiting for connections\n");
         if ((conn_fd = accept(listen_fd, NULL, 0)) != -1)
             handle_connection(conn_fd, ctx, NULL, input_file, hsprop, request_key_update);
     }
@@ -498,7 +519,7 @@ int main(int argc, char **argv)
         }
     }
     if (key_exchanges[0] == NULL)
-        key_exchanges[0] = &ptls_openssl_secp256r1;
+        key_exchanges[0] = &ptls_openssl_x25519;
     if (esni_file != NULL) {
         if (esni_key_exchanges.count == 0) {
             fprintf(stderr, "-E must be used together with -K\n");
