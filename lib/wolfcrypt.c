@@ -557,9 +557,10 @@ Exit:
 }
 
 ptls_key_exchange_algorithm_t ptls_wolfcrypt_secp256r1 = {PTLS_GROUP_SECP256R1, wc_secp256r1_create_key_exchange, wc_secp256r1_key_exchange};
-ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[] = {&ptls_wolfcrypt_secp256r1, &ptls_wolfcrypt_x25519, NULL};
-
 ptls_key_exchange_algorithm_t ptls_wolfcrypt_x25519 = {PTLS_GROUP_X25519, wc_x25519_create_key_exchange, wc_x25519_key_exchange};
+
+ptls_key_exchange_algorithm_t *ptls_wolfcrypt_key_exchanges[] = {&ptls_wolfcrypt_x25519, &ptls_wolfcrypt_secp256r1, NULL};
+
 #endif /* USE_WOLFSSL_KX */
 
 ptls_define_hash(sha256, wc_Sha256, wc_InitSha256, wc_Sha256Update, wc_Sha256Final);
@@ -751,7 +752,7 @@ ptls_cipher_suite_t ptls_wolfcrypt_aes128gcmsha256 = {PTLS_CIPHER_SUITE_AES_128_
 ptls_cipher_suite_t ptls_wolfcrypt_aes256gcmsha384 = {PTLS_CIPHER_SUITE_AES_256_GCM_SHA384, &ptls_wolfcrypt_aes256gcm,
                                                        &ptls_wolfcrypt_sha384};
 
-ptls_cipher_suite_t *ptls_wolfcrypt_cipher_suites[] = {&ptls_wolfcrypt_aes256gcmsha384, &ptls_wolfcrypt_aes128gcmsha256, NULL};
+ptls_cipher_suite_t *ptls_wolfcrypt_cipher_suites[] = {&ptls_wolfcrypt_aes128gcmsha256, &ptls_wolfcrypt_aes256gcmsha384, NULL};
 #endif /* USE_WOLFSSL_AEAD */
 
 #if 0
