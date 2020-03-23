@@ -32,6 +32,18 @@
 #include <wolfssl/wolfcrypt/curve25519.h>
 #include <wolfssl/wolfcrypt/sha256.h>
 #include <wolfssl/wolfcrypt/sha512.h>
+#include "wolfssl/openssl/bn.h"
+#include "wolfssl/openssl/crypto.h"
+#include "wolfssl/openssl/ec.h"
+#include "wolfssl/openssl/ecdh.h"
+#include "wolfssl/openssl/err.h"
+#include "wolfssl/openssl/evp.h"
+#include "wolfssl/openssl/objects.h"
+#include "wolfssl/openssl/rand.h"
+#include "wolfssl/openssl/x509.h"
+#include "wolfssl/openssl/x509v3.h"
+#include "wolfssl/openssl/ssl.h"
+#include "wolfssl/openssl/x509v3.h"
 
 #ifdef NO_INLINE
     #include <wolfssl/wolfcrypt/misc.h>
@@ -43,6 +55,31 @@
 #include "picotls_settings.h"
 #include "picotls.h"
 #include "picotls/wolfcrypt.h"
+
+/* OpenSSL互換がないため */
+int EVP_PKEY_CTX_set_rsa_mgf1_md(EVP_PKEY_CTX *ctx, const EVP_MD *md){
+    return 0;
+}
+
+int EVP_PKEY_CTX_set_rsa_pss_saltlen(EVP_PKEY_CTX *ctx, int len){
+    return 0;
+}
+
+int EVP_PKEY_up_ref(EVP_PKEY *pkey)
+{
+    return 0;
+}
+
+int X509_STORE_CTX_set_purpose(X509_STORE_CTX *ctx, int purpose)
+{
+    return 0;
+}
+
+int X509_STORE_up_ref(X509_STORE *vfy)
+{
+    return 0;
+}
+/* OpenSSL互換がないため */
 
 void ptls_wolfcrypt_random_bytes(void *buf, size_t len)
 {
@@ -76,6 +113,368 @@ static int setup_certificate_buffer(const char* certbuf, ptls_iovec_t *dst, size
 
     X509_free(cert);
     return ret;
+}
+
+static int do_sign(EVP_PKEY *key, ptls_buffer_t *outbuf, ptls_iovec_t input, const EVP_MD *md)
+{
+    EVP_MD_CTX *ctx = NULL;
+    EVP_PKEY_CTX *pkey_ctx;
+    size_t siglen;
+    int ret;
+
+    if ((ctx = EVP_MD_CTX_create()) == NULL) {
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;
+    }
+    if (EVP_DigestSignInit(ctx, &pkey_ctx, md, NULL, key) != 1) {
+        ret = PTLS_ERROR_LIBRARY;
+        goto Exit;
+    }
+    if (EVP_PKEY_id(key) == EVP_PKEY_RSA) {
+        if (EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_PSS_PADDING) != 1) {
+            ret = PTLS_ERROR_LIBRARY;
+            goto Exit;
+        }
+        if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pkey_ctx, -1) != 1) {
+            ret = PTLS_ERROR_LIBRARY;
+            goto Exit;
+        }
+        if (EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, EVP_sha256()) != 1) {
+            ret = PTLS_ERROR_LIBRARY;
+            goto Exit;
+        }
+    }
+    if (EVP_DigestSignUpdate(ctx, input.base, input.len) != 1) {
+        ret = PTLS_ERROR_LIBRARY;
+        goto Exit;
+    }
+    if (EVP_DigestSignFinal(ctx, NULL, &siglen) != 1) {
+        ret = PTLS_ERROR_LIBRARY;
+        goto Exit;
+    }
+    if ((ret = ptls_buffer_reserve(outbuf, siglen)) != 0)
+        goto Exit;
+    if (EVP_DigestSignFinal(ctx, outbuf->base + outbuf->off, &siglen) != 1) {
+        ret = PTLS_ERROR_LIBRARY;
+        goto Exit;
+    }
+    outbuf->off += siglen;
+
+    ret = 0;
+Exit:
+    if (ctx != NULL)
+        EVP_MD_CTX_destroy(ctx);
+    return ret;
+}
+
+static int sign_certificate(ptls_sign_certificate_t *_self, ptls_t *tls, uint16_t *selected_algorithm, ptls_buffer_t *outbuf,
+                            ptls_iovec_t input, const uint16_t *algorithms, size_t num_algorithms)
+{
+    ptls_openssl_sign_certificate_t *self = (ptls_openssl_sign_certificate_t *)_self;
+    const struct st_ptls_openssl_signature_scheme_t *scheme;
+
+    /* select the algorithm */
+    for (scheme = self->schemes; scheme->scheme_id != UINT16_MAX; ++scheme) {
+        size_t i;
+        for (i = 0; i != num_algorithms; ++i)
+            if (algorithms[i] == scheme->scheme_id)
+                goto Found;
+    }
+    return PTLS_ALERT_HANDSHAKE_FAILURE;
+
+Found:
+    *selected_algorithm = scheme->scheme_id;
+    return do_sign(self->key, outbuf, input, scheme->scheme_md);
+}
+
+static X509 *to_x509(ptls_iovec_t vec)
+{
+    const uint8_t *p = vec.base;
+    return d2i_X509(NULL, &p, (long)vec.len);
+}
+
+static int verify_sign(void *verify_ctx, ptls_iovec_t data, ptls_iovec_t signature)
+{
+    EVP_PKEY *key = verify_ctx;
+    EVP_MD_CTX *ctx = NULL;
+    EVP_PKEY_CTX *pkey_ctx = NULL;
+    int ret = 0;
+
+    if (data.base == NULL)
+        goto Exit;
+
+    if ((ctx = EVP_MD_CTX_create()) == NULL) {
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;
+    }
+    if (EVP_DigestVerifyInit(ctx, &pkey_ctx, EVP_sha256(), NULL, key) != 1) {
+        ret = PTLS_ERROR_LIBRARY;
+        goto Exit;
+    }
+    if (EVP_PKEY_id(key) == EVP_PKEY_RSA) {
+        if (EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_PSS_PADDING) != 1) {
+            ret = PTLS_ERROR_LIBRARY;
+            goto Exit;
+        }
+        if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pkey_ctx, -1) != 1) {
+            ret = PTLS_ERROR_LIBRARY;
+            goto Exit;
+        }
+        if (EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, EVP_sha256()) != 1) {
+            ret = PTLS_ERROR_LIBRARY;
+            goto Exit;
+        }
+    }
+    if (EVP_DigestVerifyUpdate(ctx, data.base, data.len) != 1) {
+        ret = PTLS_ERROR_LIBRARY;
+        goto Exit;
+    }
+    if (EVP_DigestVerifyFinal(ctx, signature.base, signature.len) != 1) {
+        ret = PTLS_ALERT_DECRYPT_ERROR;
+        goto Exit;
+    }
+    ret = 0;
+
+Exit:
+    if (ctx != NULL)
+        EVP_MD_CTX_destroy(ctx);
+    EVP_PKEY_free(key);
+    return ret;
+}
+
+static int verify_cert_chain(X509_STORE *store, X509 *cert, STACK_OF(X509) * chain, int is_server, const char *server_name)
+{
+    X509_STORE_CTX *verify_ctx;
+    int ret;
+
+    assert(server_name != NULL && "ptls_set_server_name MUST be called");
+
+    /* verify certificate chain */
+    if ((verify_ctx = X509_STORE_CTX_new()) == NULL) {
+        ret = PTLS_ERROR_NO_MEMORY;
+        goto Exit;
+    }
+    if (X509_STORE_CTX_init(verify_ctx, store, cert, chain) != 1) {
+        ret = PTLS_ERROR_LIBRARY;
+        goto Exit;
+    }
+    X509_STORE_CTX_set_purpose(verify_ctx, is_server ? X509_PURPOSE_SSL_SERVER : X509_PURPOSE_SSL_CLIENT);
+    if (X509_verify_cert(verify_ctx) != 1) {
+        int x509_err = X509_STORE_CTX_get_error(verify_ctx);
+        switch (x509_err) {
+        case X509_V_ERR_OUT_OF_MEM:
+            ret = PTLS_ERROR_NO_MEMORY;
+            break;
+        case X509_V_ERR_CERT_REVOKED:
+            ret = PTLS_ALERT_CERTIFICATE_REVOKED;
+            break;
+        case X509_V_ERR_CERT_NOT_YET_VALID:
+        case X509_V_ERR_CERT_HAS_EXPIRED:
+            ret = PTLS_ALERT_CERTIFICATE_EXPIRED;
+            break;
+        case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+        case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+        case X509_V_ERR_CERT_UNTRUSTED:
+        case X509_V_ERR_CERT_REJECTED:
+            ret = PTLS_ALERT_UNKNOWN_CA;
+            break;
+        case X509_V_ERR_INVALID_CA:
+            ret = PTLS_ALERT_BAD_CERTIFICATE;
+            break;
+        default:
+            ret = PTLS_ALERT_CERTIFICATE_UNKNOWN;
+            break;
+        }
+        goto Exit;
+    }
+
+#ifdef X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS
+    /* verify CN */
+    if (server_name != NULL) {
+        if (ptls_server_name_is_ipaddr(server_name)) {
+            ret = X509_check_ip_asc(cert, server_name, 0);
+        } else {
+            ret = X509_check_host(cert, server_name, strlen(server_name), X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS, NULL);
+        }
+        if (ret != 1) {
+            if (ret == 0) { /* failed match */
+                ret = PTLS_ALERT_BAD_CERTIFICATE;
+            } else {
+                ret = PTLS_ERROR_LIBRARY;
+            }
+            goto Exit;
+        }
+    }
+#else
+#warning "hostname validation is disabled; OpenSSL >= 1.0.2 or LibreSSL >= 2.5.0 is required"
+#endif
+
+    ret = 0;
+
+Exit:
+    // if (verify_ctx != NULL)
+    //     X509_STORE_CTX_free(verify_ctx);
+    return ret;
+}
+
+static int verify_cert(ptls_verify_certificate_t *_self, ptls_t *tls, int (**verifier)(void *, ptls_iovec_t, ptls_iovec_t),
+                       void **verify_data, ptls_iovec_t *certs, size_t num_certs)
+{
+    ptls_openssl_verify_certificate_t *self = (ptls_openssl_verify_certificate_t *)_self;
+    X509 *cert = NULL;
+    STACK_OF(X509) *chain = sk_X509_new();
+    size_t i;
+    int ret = 0;
+
+    assert(num_certs != 0);
+
+    /* convert certificates to OpenSSL representation */
+    if ((cert = to_x509(certs[0])) == NULL) {
+        ret = PTLS_ALERT_BAD_CERTIFICATE;
+        goto Exit;
+    }
+    for (i = 0; i != num_certs; ++i) {
+        X509 *interm = to_x509(certs[i]);
+        if (interm == NULL) {
+            ret = PTLS_ALERT_BAD_CERTIFICATE;
+            goto Exit;
+        }
+        sk_X509_push(chain, interm);
+    }
+
+    /* verify the chain */
+    if ((ret = verify_cert_chain(self->cert_store, cert, chain, ptls_is_server(tls), ptls_get_server_name(tls))) != 0)
+        goto Exit;
+
+    /* extract public key for verifying the TLS handshake signature */
+    if ((*verify_data = X509_get_pubkey(cert)) == NULL) {
+        ret = PTLS_ALERT_BAD_CERTIFICATE;
+        goto Exit;
+    }
+    *verifier = verify_sign;
+
+Exit:
+    if (chain != NULL)
+        sk_X509_pop_free(chain, X509_free);
+    if (cert != NULL)
+        X509_free(cert);
+    return ret;
+}
+
+int ptls_openssl_init_verify_certificate(ptls_openssl_verify_certificate_t *self, X509_STORE *store)
+{
+    *self = (ptls_openssl_verify_certificate_t){{verify_cert}};
+
+    if (store != NULL) {
+        X509_STORE_up_ref(store);
+        self->cert_store = store;
+    } else {
+        /* use default store */
+        if ((self->cert_store = ptls_openssl_create_default_certificate_store()) == NULL)
+            return -1;
+    }
+
+    return 0;
+}
+
+void ptls_openssl_dispose_verify_certificate(ptls_openssl_verify_certificate_t *self)
+{
+    X509_STORE_free(self->cert_store);
+    free(self);
+}
+
+X509_STORE *ptls_openssl_create_default_certificate_store(void)
+{
+    X509_STORE *store;
+    X509_LOOKUP *lookup;
+
+    if ((store = X509_STORE_new()) == NULL)
+        goto Error;
+    if ((lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file())) == NULL)
+        goto Error;
+    X509_LOOKUP_load_file(lookup, NULL, X509_FILETYPE_DEFAULT);
+    if ((lookup = X509_STORE_add_lookup(store, X509_LOOKUP_hash_dir())) == NULL)
+        goto Error;
+    X509_LOOKUP_add_dir(lookup, NULL, X509_FILETYPE_DEFAULT);
+
+    return store;
+Error:
+    if (store != NULL)
+        X509_STORE_free(store);
+    return NULL;
+}
+
+int ptls_openssl_init_sign_certificate(ptls_openssl_sign_certificate_t *self, EVP_PKEY *key)
+{
+    *self = (ptls_openssl_sign_certificate_t){{sign_certificate}};
+    size_t scheme_index = 0;
+
+#define PUSH_SCHEME(id, md)                                                                                                        \
+    self->schemes[scheme_index++] = (struct st_ptls_openssl_signature_scheme_t)                                                    \
+    {                                                                                                                              \
+        id, md                                                                                                                     \
+    }
+
+    switch (EVP_PKEY_id(key)) {
+    case EVP_PKEY_RSA:
+        PUSH_SCHEME(PTLS_SIGNATURE_RSA_PSS_RSAE_SHA256, EVP_sha256());
+        PUSH_SCHEME(PTLS_SIGNATURE_RSA_PSS_RSAE_SHA384, EVP_sha384());
+        PUSH_SCHEME(PTLS_SIGNATURE_RSA_PSS_RSAE_SHA512, EVP_sha512());
+        break;
+    case EVP_PKEY_EC: {
+        //EC_KEY *eckey = EVP_PKEY_get1_EC_KEY(key);
+        EC_KEY *eckey = key->ecc;
+        switch (EC_GROUP_get_curve_name(EC_KEY_get0_group(eckey))) {
+        case NID_X9_62_prime256v1:
+            PUSH_SCHEME(PTLS_SIGNATURE_ECDSA_SECP256R1_SHA256, EVP_sha256());
+            break;
+#if defined(NID_secp384r1) && !OPENSSL_NO_SHA384
+        case NID_secp384r1:
+            PUSH_SCHEME(PTLS_SIGNATURE_ECDSA_SECP384R1_SHA384, EVP_sha384());
+            break;
+#endif
+#if defined(NID_secp384r1) && !OPENSSL_NO_SHA512
+        case NID_secp521r1:
+            PUSH_SCHEME(PTLS_SIGNATURE_ECDSA_SECP521R1_SHA512, EVP_sha512());
+            break;
+#endif
+        default:
+            EC_KEY_free(eckey);
+            return PTLS_ERROR_INCOMPATIBLE_KEY;
+        }
+        //EC_KEY_free(eckey);
+    } break;
+    default:
+        return PTLS_ERROR_INCOMPATIBLE_KEY;
+    }
+    PUSH_SCHEME(UINT16_MAX, NULL);
+    assert(scheme_index <= sizeof(self->schemes) / sizeof(self->schemes[0]));
+
+#undef PUSH_SCHEME
+
+    EVP_PKEY_up_ref(key);
+    self->key = key;
+
+    return 0;
+}
+
+void ptls_openssl_dispose_sign_certificate(ptls_openssl_sign_certificate_t *self)
+{
+    EVP_PKEY_free(self->key);
+}
+
+static int serialize_cert(X509 *cert, ptls_iovec_t *dst)
+{
+    int len = i2d_X509(cert, NULL);
+    assert(len > 0);
+
+    if ((dst->base = malloc(len)) == NULL)
+        return PTLS_ERROR_NO_MEMORY;
+    unsigned char *p = dst->base;
+    dst->len = i2d_X509(cert, &p);
+    assert(len == dst->len);
+
+    return 0;
 }
 
 #define WOLF_MAX_CERTS_IN_CONTEXT 16

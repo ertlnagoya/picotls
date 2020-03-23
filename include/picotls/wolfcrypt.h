@@ -26,6 +26,10 @@
 extern "C" {
 #endif
 
+#include "wolfssl/openssl/opensslv.h"
+#include "wolfssl/openssl/evp.h"
+#include "wolfssl/openssl/hmac.h"
+#include "wolfssl/openssl/x509.h"
 #include "picotls_settings.h"
 #include "picotls.h"
 
@@ -52,6 +56,29 @@ int wolfcrypt_load_certificates(ptls_context_t *ctx);
 #endif
 
 void ptls_wolfcrypt_random_bytes(void *buf, size_t len);
+
+typedef struct st_ptls_openssl_verify_certificate_t {
+    ptls_verify_certificate_t super;
+    X509_STORE *cert_store;
+} ptls_openssl_verify_certificate_t;
+
+int ptls_openssl_init_verify_certificate(ptls_openssl_verify_certificate_t *self, X509_STORE *store);
+void ptls_openssl_dispose_verify_certificate(ptls_openssl_verify_certificate_t *self);
+X509_STORE *ptls_openssl_create_default_certificate_store(void);
+
+struct st_ptls_openssl_signature_scheme_t {
+    uint16_t scheme_id;
+    const EVP_MD *scheme_md;
+};
+
+typedef struct st_ptls_openssl_sign_certificate_t {
+    ptls_sign_certificate_t super;
+    EVP_PKEY *key;
+    struct st_ptls_openssl_signature_scheme_t schemes[4]; /* terminated by .scheme_id == UINT16_MAX */
+} ptls_openssl_sign_certificate_t;
+
+int ptls_openssl_init_sign_certificate(ptls_openssl_sign_certificate_t *self, EVP_PKEY *key);
+void ptls_openssl_dispose_sign_certificate(ptls_openssl_sign_certificate_t *self);
 
 #if 0
 
