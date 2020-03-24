@@ -44,6 +44,7 @@
 #include "wolfssl/openssl/x509v3.h"
 #include "wolfssl/openssl/ssl.h"
 #include "wolfssl/openssl/x509v3.h"
+#include "wolfssl/openssl/x509_vfy.h"
 
 #ifdef NO_INLINE
     #include <wolfssl/wolfcrypt/misc.h>
@@ -62,16 +63,6 @@ int EVP_PKEY_CTX_set_rsa_mgf1_md(EVP_PKEY_CTX *ctx, const EVP_MD *md){
 }
 
 int EVP_PKEY_CTX_set_rsa_pss_saltlen(EVP_PKEY_CTX *ctx, int len){
-    return 0;
-}
-
-int EVP_PKEY_up_ref(EVP_PKEY *pkey)
-{
-    return 0;
-}
-
-int X509_STORE_CTX_set_purpose(X509_STORE_CTX *ctx, int purpose)
-{
     return 0;
 }
 

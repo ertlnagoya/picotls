@@ -151,10 +151,6 @@ int EVP_PKEY_up_ref(EVP_PKEY *pkey)
     return 0;
 }
 
-int X509_STORE_CTX_set_purpose(X509_STORE_CTX *ctx, int purpose)
-{
-	return 0;
-}
 # define         EVP_CTRL_INIT                   0x0
 # define         EVP_CTRL_SET_KEY_LENGTH         0x1
 # define         EVP_CTRL_GET_RC2_KEY_BITS       0x2
